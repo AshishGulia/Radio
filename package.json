@@ -1,0 +1,17 @@
+{
+  "name": "radiowave",
+  "version": "1.0.0",
+  "description": "RadioWave – Live radio from India and around the world",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "build": "echo 'No build step required for static site'"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.1"
+  }
+}
