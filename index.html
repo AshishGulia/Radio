@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="RadioWave – Live radio from India and around the world" />
+  <meta name="theme-color" content="#0a0a0f" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>RadioWave</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Font Awesome 6 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+  <!-- App CSS -->
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/player.css" />
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════════
+     APP SHELL
+═══════════════════════════════════════════════════════════════════ -->
+<div id="app">
+
+  <!-- ── HEADER ────────────────────────────────────────────────── -->
+  <header>
+    <a class="header-logo" href="#" onclick="return false;">
+      <i class="fas fa-tower-broadcast"></i>
+      RadioWave
+    </a>
+    <div class="header-actions">
+      <button class="icon-btn" title="Toggle theme" onclick="toggleThemeBtn(this)" id="themeToggleBtn"
+              aria-label="Toggle dark/light mode">
+        <i class="fas fa-moon" id="themeIcon"></i>
+      </button>
+      <button class="icon-btn" title="Settings" onclick="Settings.open()" aria-label="Settings">
+        <i class="fas fa-cog"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- ── MAIN CONTENT (tabs render here) ──────────────────────── -->
+  <main id="content" role="main" aria-live="polite">
+    <!-- Dynamic content injected by app.js -->
+    <div class="empty-state" style="margin-top: 80px;">
+      <div class="connecting-overlay">
+        <!-- VINTAGE ROTATING CD PLAYER ANIMATION -->
+        <div class="vintage-cd-wrap">
+          <div class="vintage-cd-disc">
+            <div class="cd-groove-rings"></div>
+            <div class="cd-center-label">
+              <div class="cd-spindle-hole"></div>
+              <span class="cd-label-brand">RADIO WAVE</span>
+            </div>
+          </div>
+          <div class="cd-turntable-arm">
+            <div class="turntable-pivot"></div>
+            <div class="turntable-needle"></div>
+          </div>
+        </div>
+        <span class="connecting-text" style="color:var(--text-secondary);font-size:0.95rem;">Connecting…</span>
+      </div>
+    </div>
+  </main>
+
+  <!-- ── MINI PLAYER (shows when player is closed but playing) ── -->
+  <div id="mini-player" role="complementary" aria-label="Mini player"></div>
+
+  <!-- ── BOTTOM NAV ────────────────────────────────────────────── -->
+  <nav id="bottom-nav" role="navigation" aria-label="Main navigation">
+    <button class="nav-tab active" data-tab="home" aria-label="Home">
+      <i class="fas fa-house"></i>
+      <span>Home</span>
+    </button>
+    <button class="nav-tab" data-tab="favourites" aria-label="Favourites">
+      <i class="fas fa-heart"></i>
+      <span>Favourites</span>
+    </button>
+    <button class="nav-tab" data-tab="browse" aria-label="Browse">
+      <i class="fas fa-globe"></i>
+      <span>Browse</span>
+    </button>
+  </nav>
+
+  <!-- ── AD BANNER (non-intrusive bottom) ─────────────────────── -->
+  <div id="ad-banner" role="complementary" aria-label="Advertisement banner"></div>
+
+</div><!-- /#app -->
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     OVERLAY SCREENS (outside #app for z-index stacking)
+═══════════════════════════════════════════════════════════════════ -->
+
+<!-- ── FULL PLAYER SCREEN ─────────────────────────────────────── -->
+<div id="player-screen" role="dialog" aria-label="Now playing" aria-modal="true">
+  <!-- Rendered by Player.renderPlayerScreen() -->
+</div>
+
+<!-- ── SETTINGS SCREEN ───────────────────────────────────────── -->
+<div id="settings-screen" role="dialog" aria-label="Settings" aria-modal="true">
+  <!-- Rendered by Settings.renderSettings() -->
+</div>
+
+<!-- ── FULLSCREEN AD ─────────────────────────────────────────── -->
+<div id="ad-fullscreen" role="dialog" aria-label="Advertisement" aria-modal="true">
+  <!-- Rendered by AdSystem.showFullscreen() -->
+</div>
+
+<!-- ── COLLECTION SAVE MODAL ─────────────────────────────────── -->
+<div id="collection-modal" role="dialog" aria-label="Save to Collection" aria-modal="true" style="display:none">
+  <!-- Rendered by openCollectionModal() -->
+</div>
+
+<!-- ── DEDICATED SEPARATE GENRE WINDOW ───────────────────────── -->
+<div id="genre-window" class="genre-window" role="dialog" aria-label="Genre Stations Window" aria-modal="true" style="display:none">
+  <!-- Rendered by App.openCategory() / App.renderGenreView() -->
+</div>
+
+<!-- ── CARPLAY & ANDROID AUTO CAR MODE ───────────────────────── -->
+<div id="car-mode-screen" class="car-mode-screen" role="dialog" aria-label="CarPlay and Android Auto Car Mode" aria-modal="true" style="display:none">
+  <!-- Rendered by CarMode.render() -->
+</div>
+
+<!-- ── DEDICATED SONG LYRICS & MULTI-LANGUAGE TRANSLATION MODAL ── -->
+<div id="lyrics-screen" class="lyrics-screen" role="dialog" aria-label="Song Lyrics and Multi-Language Translations" aria-modal="true" style="display:none">
+  <!-- Rendered by LyricsEngine.render() -->
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     JAVASCRIPT (order matters)
+═══════════════════════════════════════════════════════════════════ -->
+<script src="js/data.js"></script>
+<script src="js/nowplaying.js"></script>
+<script src="js/ads.js"></script>
+<script src="js/carmode.js"></script>
+<script src="js/lyrics.js"></script>
+<script src="js/player.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/app.js"></script>
+
+<script>
+// ── THEME TOGGLE BUTTON (header) ──────────────────────────────────────────
+function toggleThemeBtn(btn) {
+  const isDark = AppState.theme === 'dark';
+  const newTheme = isDark ? 'light' : 'dark';
+  AppState.theme = newTheme;
+  document.documentElement.setAttribute('data-theme', newTheme);
+  saveState();
+
+  const icon = document.getElementById('themeIcon');
+  if (icon) icon.className = newTheme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+
+  // Sync settings toggle if open
+  const settingsToggle = document.getElementById('themeToggle');
+  if (settingsToggle) settingsToggle.checked = newTheme === 'dark';
+}
+
+// ── INIT THEME ICON ON LOAD ───────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const saved = (() => {
+    try {
+      const raw = localStorage.getItem('radiowave_state');
+      if (raw) return JSON.parse(raw).theme;
+    } catch(e) {}
+    return 'dark';
+  })();
+  const icon = document.getElementById('themeIcon');
+  if (icon) icon.className = saved === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+});
+
+// ── KEYBOARD NAVIGATION ───────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  // Space = play/pause
+  if (e.code === 'Space' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+    e.preventDefault();
+    if (AppState.currentStation) Player.togglePlay();
+  }
+  // Arrow keys = next/prev
+  if (e.code === 'ArrowRight' && e.altKey) { e.preventDefault(); Player.next(); }
+  if (e.code === 'ArrowLeft'  && e.altKey) { e.preventDefault(); Player.prev(); }
+});
+
+// ── SERVICE WORKER (optional, graceful) ───────────────────────────────────
+if ('serviceWorker' in navigator) {
+  // Skip registration for local file:// — only register on http(s)
+  if (location.protocol !== 'file:') {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+}
+</script>
+
+</body>
+</html>
