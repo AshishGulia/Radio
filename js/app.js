@@ -365,32 +365,45 @@ function shareStation(stationId) {
 }
 
 // ─── STATION ROW ITEM (MINIMAL: logo freq + name + breathing note + fav) ──────
+// ─── STATION ROW ITEM (MINIMAL: logo favicon + name + green/red status + fav) ──────
 function buildStationCard(station, opts = {}) {
-  const isFav = AppState.favourites.includes(station.id);
-  const status = NowPlaying.getStatus(station.id);
-  const noteClass = status === 'music' ? 'note-green' : 'note-red';
-  const statusBorderClass = status === 'music' ? 'live-music-active' : 'live-ad-active';
+  const isFav = AppState.favourites && AppState.favourites.includes(station.id);
+  const info = NowPlaying.getSongInfo(station.id);
+  const faviconUrl = getStationFavicon(station);
+  const statusBorderClass = info.isMusic ? 'live-music-border' : 'live-ad-border';
 
   return `
-    <div class="station-row" onclick="App.openStation(${station.id})" data-station-id="${station.id}">
-      <!-- FREQUENCY BADGE as logo with active live green / red ad indicator -->
-      <div class="row-freq-logo ${statusBorderClass}" style="background:${station.color}">
-        <span class="freq-num">${(station.freq || 'FM').replace(' FM','').replace(' AM','')}</span>
-        <span class="freq-band">${station.flag}</span>
+    <div class="station-row ${statusBorderClass}" onclick="App.openStation('${station.id}')" data-station-id="${station.id}">
+      <!-- STATION LOGO WITH MINIMALIST SVG FALLBACK (REQUIREMENT 3) -->
+      <div class="row-station-logo-box" style="background:${station.color}22;border:1px solid ${station.color}44;">
+        <img class="row-station-logo-img"
+             src="${faviconUrl}"
+             alt="${escapeQuotes(station.name)}"
+             loading="lazy"
+             onerror="this.onerror=null;this.src='${RADIO_SVG_FALLBACK}';" />
+        <span class="row-flag-badge">${station.flag || '🌍'}</span>
       </div>
 
-      <!-- STATION NAME + SUBTEXT + ANIMATED MUSIC NOTE ICON -->
+      <!-- STATION NAME + SUBTEXT + LIVE SONG/AD STATUS BADGE (REQUIREMENT 4) -->
       <div class="row-name-wrap">
-        <i class="fas fa-music row-music-note ${noteClass}" title="${status === 'music' ? 'Song playing (Live)' : status === 'podcast' ? 'Podcast on air' : 'Ad break'}"></i>
-        <div class="row-text-block">
+        <div class="row-name-top">
           <span class="row-station-name">${station.name}</span>
-          <span class="row-station-sub">${station.city}, ${station.country}</span>
+          <!-- LIVE STATUS BADGE: GREEN BLINKING LIVE MUSIC OR RED SOLID AD/TALK -->
+          <span class="status-indicator-badge-mini ${info.badgeClass}">
+            <span class="indicator-dot"></span>
+            <span>${info.badgeText}</span>
+          </span>
+        </div>
+        <div class="row-station-sub-line">
+          <span class="row-station-sub">${station.city ? `${station.city}, ` : ''}${station.country || 'Global'}</span>
+          ${station.bitrate ? `<span class="row-bitrate-pill">${station.bitrate}k</span>` : ''}
+          ${station.codec ? `<span class="row-codec-pill">${station.codec}</span>` : ''}
         </div>
       </div>
 
       <!-- FAV / COLLECTION SAVE BUTTON -->
       <button class="row-fav-btn ${isFav ? 'active' : ''}"
-              onclick="event.stopPropagation();openCollectionModal(${station.id})"
+              onclick="event.stopPropagation();openCollectionModal('${station.id}')"
               aria-label="Save to Collection">
         <i class="fa${isFav ? 's' : 'r'} fa-heart"></i>
       </button>
@@ -398,19 +411,20 @@ function buildStationCard(station, opts = {}) {
 }
 
 function buildSkeletonCard() {
-  return `<div class="station-card skeleton">
-    <div class="card-thumb skeleton-block"></div>
-    <div class="card-info">
-      <span class="skeleton-block sk-name"></span>
-      <span class="skeleton-block sk-city"></span>
-    </div>
-  </div>`;
+  return `
+    <div class="station-row skeleton-row">
+      <div class="row-station-logo-box skeleton-box"></div>
+      <div class="row-name-wrap">
+        <div class="skeleton-line sk-title"></div>
+        <div class="skeleton-line sk-sub"></div>
+      </div>
+    </div>`;
 }
 
 function buildCategoryCard(cat) {
-  const count = RadioData.getByCategory(cat.id).length;
+  const count = RadioData.getByCategory ? RadioData.getByCategory(cat.id).length : 20;
   return `
-    <div class="genre-row-chip" onclick="App.openCategory('${cat.id}')">
+    <div class="genre-row-chip" onclick="App.selectLiveGenre('${cat.id}')">
       <span class="genre-chip-icon" style="background:${cat.color}22;color:${cat.color}">
         <i class="fas ${cat.icon}"></i>
       </span>
@@ -419,24 +433,52 @@ function buildCategoryCard(cat) {
     </div>`;
 }
 
-// ─── SCROLL ROW BUILDER (home dashboard — 2 rows per section) ───────────────
-function buildScrollRow(title, stations, listId) {
-  if (!stations.length) return '';
-  return `
-    <div class="scroll-row">
-      <div class="row-header">
-        <h3 class="row-title">${title}</h3>
-        <button class="see-all" onclick="App.openList('${listId}')">See all <i class="fas fa-chevron-right"></i></button>
-      </div>
-      <!-- 2 ROWS OF CHANNELS (horizontal 2-row multi-line scroll, max 10 channels) -->
-      <div class="cards-scroll-2rows" id="scroll-${listId}">
-        ${stations.slice(0, 10).map(s => buildStationCard(s)).join('')}
-      </div>
-    </div>`;
-}
-
 // ─── APP CORE CONTROLLER ──────────────────────────────────────────────────────
 const App = {
+  // REQUIREMENT 1: Radio-Browser API live filter state and pagination
+  liveFilter: {
+    query: '',
+    country: '',
+    tag: '',
+    offset: 0,
+    limit: 50
+  },
+  liveStations: [],
+  isLoadingStations: false,
+  hasMoreStations: true,
+  searchDebounceTimer: null,
+
+  // Curated country quick filter list
+  popularCountries: [
+    { name: 'All', label: 'All Countries', flag: '🌍' },
+    { name: 'India', label: 'India', flag: '🇮🇳' },
+    { name: 'United States', label: 'USA', flag: '🇺🇸' },
+    { name: 'United Kingdom', label: 'UK', flag: '🇬🇧' },
+    { name: 'Germany', label: 'Germany', flag: '🇩🇪' },
+    { name: 'France', label: 'France', flag: '🇫🇷' },
+    { name: 'Brazil', label: 'Brazil', flag: '🇧🇷' },
+    { name: 'Japan', label: 'Japan', flag: '🇯🇵' },
+    { name: 'Canada', label: 'Canada', flag: '🇨🇦' },
+    { name: 'Spain', label: 'Spain', flag: '🇪🇸' },
+    { name: 'Australia', label: 'Australia', flag: '🇦🇺' },
+    { name: 'Italy', label: 'Italy', flag: '🇮🇹' }
+  ],
+
+  // Curated music genres quick filter list
+  popularGenres: [
+    { id: '', name: 'All Genres', icon: 'fa-globe' },
+    { id: 'pop', name: 'Pop', icon: 'fa-fire' },
+    { id: 'rock', name: 'Rock', icon: 'fa-guitar' },
+    { id: 'classical', name: 'Classical', icon: 'fa-feather' },
+    { id: 'jazz', name: 'Jazz', icon: 'fa-saxophone' },
+    { id: 'bollywood', name: 'Bollywood', icon: 'fa-film' },
+    { id: 'dance', name: 'Dance / EDM', icon: 'fa-bolt' },
+    { id: 'country', name: 'Country', icon: 'fa-hat-cowboy' },
+    { id: 'lofi', name: 'Lo-Fi Chill', icon: 'fa-headphones' },
+    { id: 'hiphop', name: 'Hip Hop', icon: 'fa-microphone' },
+    { id: 'reggae', name: 'Reggae', icon: 'fa-compact-disc' },
+    { id: 'ambient', name: 'Ambient', icon: 'fa-cloud' }
+  ],
 
   init() {
     loadState();
@@ -450,39 +492,20 @@ const App = {
     if (typeof AdSystem !== 'undefined') AdSystem.init();
     this.bindSearch();
 
-    // Listen for now-playing status changes to update visible cards
-    NowPlaying.onStatusChange((stationId, newStatus) => {
-      const songInfo = NowPlaying.getSongInfo(stationId);
-      const npIcon = newStatus === 'music' ? 'fa-music' : newStatus === 'podcast' ? 'fa-microphone' : 'fa-video';
-      const statusLabel = NowPlaying.getHindiLabel(newStatus);
-
-      // Update badges
-      document.querySelectorAll(`[data-station-id="${stationId}"] .status-badge`).forEach(el => {
-        el.outerHTML = NowPlaying.getBadgeHTML(stationId);
+    // REQUIREMENT 4: Real-time Live ICY status update listener
+    NowPlaying.onStatusChange((stationId, info) => {
+      // Update badge on station card
+      document.querySelectorAll(`[data-station-id="${stationId}"] .status-indicator-badge-mini`).forEach(el => {
+        el.className = `status-indicator-badge-mini ${info.badgeClass}`;
+        el.innerHTML = `<span class="indicator-dot"></span><span>${info.badgeText}</span>`;
       });
-
-      // Update song info on card
-      document.querySelectorAll(`[data-station-id="${stationId}"] .card-np-info`).forEach(el => {
-        el.innerHTML = `
-          <i class="fas ${npIcon} np-bullet ${newStatus}"></i>
-          <span class="card-song-title"><strong>${songInfo.song}</strong></span>
-          <span class="card-singer-name">— ${songInfo.artist}</span>`;
+      // Update border on station card
+      document.querySelectorAll(`[data-station-id="${stationId}"]`).forEach(card => {
+        card.classList.toggle('live-music-border', info.isMusic);
+        card.classList.toggle('live-ad-border', !info.isMusic);
       });
-
-      // Update play tag on button
-      document.querySelectorAll(`[data-station-id="${stationId}"] .channel-play-tag`).forEach(el => {
-        el.className = `channel-play-tag ${newStatus}`;
-        el.innerHTML = `<i class="fas ${npIcon}"></i> ${statusLabel}`;
-      });
-
-      // Update music note icon in minimal station row (green for music, red for podcast/ad)
-      document.querySelectorAll(`[data-station-id="${stationId}"] .row-music-note`).forEach(el => {
-        el.className = `fas fa-music row-music-note ${newStatus === 'music' ? 'note-green' : 'note-red'}`;
-        el.title = newStatus === 'music' ? 'Song playing' : newStatus === 'podcast' ? 'Podcast on air' : 'Ad break';
-      });
-
-      // Update mini player if current station status shifted
-      if (AppState.currentStation && AppState.currentStation.id === stationId && typeof Player !== 'undefined') {
+      // Update mini player if current station
+      if (AppState.currentStation && (AppState.currentStation.id === stationId || AppState.currentStation.stationuuid === stationId)) {
         Player.updateMiniPlayer();
       }
     });
@@ -508,95 +531,229 @@ const App = {
     }
   },
 
-  // ─── TAB 1: HOME (DASHBOARD) ────────────────────────────────────────────────
+  // ─── TAB 1: HOME (DYNAMIC LIVE RADIO-BROWSER FEED + PAGINATION) ──────────────
   renderHome() {
     const content = document.getElementById('content');
     if (!content) return;
 
-    const country = AppState.settings.country || 'India';
-    const localStations = RadioData.getByCountry(country);
-    const popularStations = RadioData.getPopular();
-
     content.innerHTML = `
       <div class="tab-content home-tab">
+        <!-- SEARCH BAR (SEARCHES NAME, SINGER, KEYWORDS ON RADIO-BROWSER) -->
         <div class="search-bar-wrap">
           <div class="search-bar">
             <i class="fas fa-search"></i>
-            <input type="text" id="searchInput" placeholder="Search FM channels, song, singer, city…" oninput="App.handleSearch(this.value)" />
-            <button class="search-clear" id="searchClear" onclick="App.clearSearch()" style="display:none">✕</button>
+            <input type="text" id="searchInput"
+                   placeholder="Search worldwide live radio, song, artist…"
+                   value="${this.liveFilter.query}"
+                   oninput="App.handleLiveSearch(this.value)" />
+            <button class="search-clear" id="searchClear" onclick="App.clearLiveSearch()"
+                    style="${this.liveFilter.query ? 'display:block' : 'display:none'}">✕</button>
           </div>
         </div>
 
-        <div id="searchResults" class="search-results" style="display:none"></div>
+        <!-- POPULAR COUNTRIES FILTER RIBBON -->
+        <div class="filter-chips-section">
+          <div class="filter-section-title"><i class="fas fa-globe-americas"></i> Filter by Country:</div>
+          <div class="chips-scroll-row" id="countryFilterChips">
+            ${this.popularCountries.map(c => `
+              <button class="filter-chip ${(c.name === 'All' && !this.liveFilter.country) || this.liveFilter.country === c.name ? 'active' : ''}"
+                      onclick="App.selectLiveCountry('${c.name}')">
+                <span class="chip-flag">${c.flag}</span>
+                <span class="chip-name">${c.label}</span>
+              </button>
+            `).join('')}
+          </div>
+        </div>
 
-        <div id="homeRows">
-          ${buildScrollRow(`📻 Local Radios (${country})`, localStations, 'local')}
-          ${buildScrollRow('🌍 Most Popular Around The World', popularStations, 'world')}
-          ${this.buildCategoriesRow()}
+        <!-- GENRE / TAG FILTER RIBBON -->
+        <div class="filter-chips-section" style="margin-top:8px;">
+          <div class="filter-section-title"><i class="fas fa-music"></i> Filter by Genre:</div>
+          <div class="chips-scroll-row" id="genreFilterChips">
+            ${this.popularGenres.map(g => `
+              <button class="filter-chip ${(g.id === '' && !this.liveFilter.tag) || this.liveFilter.tag === g.id ? 'active' : ''}"
+                      onclick="App.selectLiveGenre('${g.id}')">
+                <i class="fas ${g.icon} chip-icon"></i>
+                <span class="chip-name">${g.name}</span>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- LIVE STREAM FEED STATUS BAR -->
+        <div class="live-feed-header">
+          <div class="feed-header-left">
+            <span class="feed-pulse-dot"></span>
+            <h3 class="feed-title">Live Global Stations</h3>
+          </div>
+          <span class="feed-count-pill" id="feedCountPill">
+            ${this.liveStations.length ? `${this.liveStations.length} channels` : 'Fetching…'}
+          </span>
+        </div>
+
+        <!-- STATIONS LIST VIEW (HTTPS ONLY) -->
+        <div class="stations-list-view" id="liveStationsContainer">
+          ${this.liveStations.length ? this.liveStations.map(s => buildStationCard(s)).join('') : this.renderSkeletons()}
+        </div>
+
+        <!-- REQUIREMENT 1: LOAD MORE BUTTON (INCREMENTS OFFSET BY 50) -->
+        <div class="load-more-container" id="loadMoreContainer" style="display:${this.hasMoreStations ? 'flex' : 'none'};">
+          <button class="load-more-btn" id="loadMoreBtn" onclick="App.loadMoreStations()">
+            <i class="fas fa-plus-circle"></i>
+            <span>Load More Stations (+50)</span>
+          </button>
         </div>
       </div>`;
 
-    AppState.stationList = localStations;
-  },
-
-  // ─── CATEGORIES ROW (A to Z SORTED IN 2 ROWS + SEE ALL BUTTON) ─────────────
-  buildCategoriesRow() {
-    // Alphabetical A to Z sorting
-    const sorted = [...RadioData.categories].sort((a,b) => a.name.localeCompare(b.name));
-    // 2 rows of primary genres in ribbon (16 total: 8 per row)
-    const primary = sorted.slice(0, 16);
-
-    return `
-      <div class="scroll-row categories-ribbon-section">
-        <div class="row-header">
-          <h3 class="row-title"><i class="fas fa-layer-group"></i> All Genres (A → Z)</h3>
-          <button class="see-all" onclick="App.openList('genres')">See all <i class="fas fa-chevron-right"></i></button>
-        </div>
-
-        <!-- 2 ROWS OF HORIZONTAL SCROLLING GENRE CHIPS -->
-        <div class="genre-chips-scroll-2rows" id="categoriesScroll">
-          ${primary.map(buildCategoryCard).join('')}
-        </div>
-      </div>`;
-  },
-
-  handleSearch(query) {
-    const clear = document.getElementById('searchClear');
-    const resultsEl = document.getElementById('searchResults');
-    const rows = document.getElementById('homeRows');
-
-    if (!query.trim()) {
-      this.clearSearch();
-      return;
+    // If stations not loaded yet, initiate fetch
+    if (!this.liveStations.length) {
+      this.loadLiveStations(false);
     }
-    if (clear) clear.style.display = 'block';
-
-    const results = RadioData.search(query);
-    if (resultsEl) {
-      resultsEl.style.display = 'block';
-      resultsEl.innerHTML = results.length
-        ? `<div class="stations-list-view">${results.map(s => buildStationCard(s)).join('')}</div>`
-        : `<div class="empty-state"><i class="fas fa-search"></i><p>No stations found for "${query}"</p></div>`;
-    }
-    if (rows) rows.style.display = 'none';
-    AppState.stationList = results;
   },
 
-  clearSearch() {
+  renderSkeletons() {
+    return Array(6).fill(0).map(() => buildSkeletonCard()).join('');
+  },
+
+  // ── REQUIREMENT 1: FETCH STATIONS FROM RADIO-BROWSER API ────────────────────
+  async loadLiveStations(isAppend = false) {
+    if (this.isLoadingStations) return;
+    this.isLoadingStations = true;
+
+    const container = document.getElementById('liveStationsContainer');
+    const loadBtn = document.getElementById('loadMoreBtn');
+    const pill = document.getElementById('feedCountPill');
+
+    if (!isAppend) {
+      this.liveFilter.offset = 0;
+      if (container) container.innerHTML = this.renderSkeletons();
+    } else {
+      if (loadBtn) {
+        loadBtn.disabled = true;
+        loadBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> <span>Loading Next 50 Stations…</span>';
+      }
+    }
+
+    try {
+      // Query parameters: limit=50, offset={offset}, hidebroken=true, order=votes, reverse=true
+      // With &name={query}, &country={country}, &tag={genre}
+      const result = await RadioData.fetchLiveStations(this.liveFilter);
+      const fetched = result.stations || [];
+
+      if (isAppend) {
+        this.liveStations.push(...fetched);
+      } else {
+        this.liveStations = fetched;
+      }
+
+      // Update global playback playlist
+      AppState.stationList = this.liveStations;
+
+      // Render stations
+      if (container) {
+        if (!this.liveStations.length) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <i class="fas fa-broadcast-tower"></i>
+              <p>No HTTPS radio stations found</p>
+              <small>Try selecting another country or clearing the search query.</small>
+              <button class="btn-primary" onclick="App.clearLiveSearch()" style="margin-top:10px;">Reset Filters</button>
+            </div>`;
+        } else {
+          container.innerHTML = this.liveStations.map(s => buildStationCard(s)).join('');
+        }
+      }
+
+      // Update count badge
+      if (pill) pill.textContent = `${this.liveStations.length} channels`;
+
+      // Check if more stations available (less than 50 means reached the end)
+      const loadContainer = document.getElementById('loadMoreContainer');
+      if (fetched.length < 50) {
+        this.hasMoreStations = false;
+        if (loadContainer) loadContainer.style.display = 'none';
+      } else {
+        this.hasMoreStations = true;
+        if (loadContainer) loadContainer.style.display = 'flex';
+      }
+    } catch (e) {
+      if (container && !isAppend) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <i class="fas fa-wifi"></i>
+            <p>Could not connect to Radio-Browser</p>
+            <button class="btn-primary" onclick="App.loadLiveStations(false)">Retry</button>
+          </div>`;
+      }
+    } finally {
+      this.isLoadingStations = false;
+      if (loadBtn) {
+        loadBtn.disabled = false;
+        loadBtn.innerHTML = '<i class="fas fa-plus-circle"></i> <span>Load More Stations (+50)</span>';
+      }
+    }
+  },
+
+  // REQUIREMENT 1: Load more increments offset by 50
+  loadMoreStations() {
+    this.liveFilter.offset += 50;
+    this.loadLiveStations(true);
+  },
+
+  // REQUIREMENT 1: Country filter reset offset to 0
+  selectLiveCountry(country) {
+    this.liveFilter.country = (country === 'All') ? '' : country;
+    this.liveFilter.offset = 0;
+
+    // Update chip styling
+    document.querySelectorAll('#countryFilterChips .filter-chip').forEach(btn => {
+      const match = (country === 'All' && btn.textContent.includes('All')) || btn.textContent.includes(country);
+      btn.classList.toggle('active', match);
+    });
+
+    this.loadLiveStations(false);
+  },
+
+  // REQUIREMENT 1: Genre filter reset offset to 0
+  selectLiveGenre(tag) {
+    this.liveFilter.tag = tag;
+    this.liveFilter.offset = 0;
+
+    // Update chip styling
+    document.querySelectorAll('#genreFilterChips .filter-chip').forEach(btn => {
+      const match = (!tag && btn.textContent.includes('All Genres')) || (tag && btn.textContent.toLowerCase().includes(tag.toLowerCase()));
+      btn.classList.toggle('active', match);
+    });
+
+    this.loadLiveStations(false);
+  },
+
+  // REQUIREMENT 1: Search appends &name={query} and resets offset to 0
+  handleLiveSearch(query) {
+    const clearBtn = document.getElementById('searchClear');
+    if (clearBtn) clearBtn.style.display = query ? 'block' : 'none';
+
+    if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
+    this.searchDebounceTimer = setTimeout(() => {
+      this.liveFilter.query = query.trim();
+      this.liveFilter.offset = 0;
+      this.loadLiveStations(false);
+    }, 350);
+  },
+
+  clearLiveSearch() {
     const input = document.getElementById('searchInput');
-    const clear = document.getElementById('searchClear');
-    const resultsEl = document.getElementById('searchResults');
-    const rows = document.getElementById('homeRows');
-
     if (input) input.value = '';
-    if (clear) clear.style.display = 'none';
-    if (resultsEl) resultsEl.style.display = 'none';
-    if (rows) rows.style.display = '';
+    const clearBtn = document.getElementById('searchClear');
+    if (clearBtn) clearBtn.style.display = 'none';
+
+    this.liveFilter.query = '';
+    this.liveFilter.offset = 0;
+    this.loadLiveStations(false);
   },
 
   bindSearch() {
     document.addEventListener('keydown', e => {
-      if (e.key === 'Escape') this.clearSearch();
+      if (e.key === 'Escape') this.clearLiveSearch();
     });
   },
 
@@ -1199,14 +1356,13 @@ const App = {
     if (!AppState.stationList || !AppState.stationList.length) {
       AppState.stationList = RadioData.stations;
     }
-    const idx = AppState.stationList.findIndex(s => s.id === station.id);
+    const idx = AppState.stationList.findIndex(s => String(s.id) === String(station.id) || (station.stationuuid && s.stationuuid === station.stationuuid));
     if (idx !== -1) {
       AppState.stationIndex = idx;
     } else {
       AppState.stationList.push(station);
       AppState.stationIndex = AppState.stationList.length - 1;
     }
-    // Always starts playing in minimized bar
     Player.play(station);
   },
 };

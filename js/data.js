@@ -2233,8 +2233,13 @@ const RadioData = {
     "21": { "song": "Brown Munde", "artist": "AP Dhillon, Gurinder Gill", "thumb": "https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=200&auto=format&fit=crop&q=80" }
   },
 
+  // Live stations map for dynamic Radio-Browser stations
+  liveStationsMap: {},
+
   getById(id) {
-    return this.stations.find(s => s.id == id);
+    if (!id) return null;
+    if (this.liveStationsMap[id]) return this.liveStationsMap[id];
+    return this.stations.find(s => String(s.id) === String(id) || s.stationuuid === id);
   },
   getByCountry(country) {
     return this.stations.filter(s => s.country && s.country.toLowerCase() === (country || '').toLowerCase());
@@ -2255,9 +2260,148 @@ const RadioData = {
       (s.description && s.description.toLowerCase().includes(q)) ||
       (s.category && s.category.some(c => c.toLowerCase().includes(q)))
     );
+  },
+
+  // ── RADIO-BROWSER API CLIENT WITH HTTPS MIXED CONTENT FILTERING ──
+  async fetchLiveStations({ query = '', country = '', tag = '', offset = 0, limit = 50 } = {}) {
+    const cleanQuery = (query || '').trim();
+    const cleanCountry = (country && country.toLowerCase() !== 'all') ? country.trim() : '';
+    const cleanTag = (tag && tag.toLowerCase() !== 'all') ? tag.trim() : '';
+
+    // 1. Try direct Radio-Browser API endpoint first as requested
+    const params = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset),
+      hidebroken: 'true',
+      order: 'votes',
+      reverse: 'true'
+    });
+    if (cleanQuery) params.append('name', cleanQuery);
+    if (cleanCountry) params.append('country', cleanCountry);
+    if (cleanTag) params.append('tag', cleanTag);
+
+    const directUrl = `https://de1.api.radio-browser.info/json/stations/search?${params.toString()}`;
+
+    try {
+      const response = await fetch(directUrl, { signal: AbortSignal.timeout(6000) });
+      if (response.ok) {
+        const raw = await response.json();
+        // REQUIREMENT 2: Filter fetched results so ONLY stations where url_resolved starts with https:// are displayed
+        const httpsOnly = (raw || []).filter(s => s && typeof s.url_resolved === 'string' && s.url_resolved.startsWith('https://'));
+        const normalized = httpsOnly.map(s => this.normalizeStation(s));
+        normalized.forEach(st => { this.liveStationsMap[st.id] = st; });
+        return { success: true, offset, limit, stations: normalized, rawCount: raw.length };
+      }
+    } catch (e) {
+      // Direct call failed or timed out, try our server proxy
+    }
+
+    // 2. Fallback to /api/stations proxy endpoint
+    try {
+      const proxyParams = new URLSearchParams({
+        limit: String(limit),
+        offset: String(offset)
+      });
+      if (cleanQuery) proxyParams.append('name', cleanQuery);
+      if (cleanCountry) proxyParams.append('country', cleanCountry);
+      if (cleanTag) proxyParams.append('tag', cleanTag);
+
+      const proxyUrl = `/api/stations?${proxyParams.toString()}`;
+      const proxyRes = await fetch(proxyUrl);
+      if (proxyRes.ok) {
+        const data = await proxyRes.json();
+        if (data && data.stations) {
+          const httpsOnly = data.stations.filter(s => s && typeof s.url_resolved === 'string' && s.url_resolved.startsWith('https://'));
+          const normalized = httpsOnly.map(s => this.normalizeStation(s));
+          normalized.forEach(st => { this.liveStationsMap[st.id] = st; });
+          return { success: true, offset, limit, stations: normalized, rawCount: data.totalReturned || normalized.length };
+        }
+      }
+    } catch (err) {}
+
+    // 3. Fallback to local curated stations if completely offline
+    let local = this.stations;
+    if (cleanCountry) local = local.filter(s => s.country && s.country.toLowerCase().includes(cleanCountry.toLowerCase()));
+    if (cleanTag) local = local.filter(s => s.category && s.category.some(c => c.toLowerCase().includes(cleanTag.toLowerCase())));
+    if (cleanQuery) local = local.filter(s => s.name.toLowerCase().includes(cleanQuery.toLowerCase()));
+    const paged = local.slice(offset, offset + limit).map(s => this.normalizeStation(s));
+    paged.forEach(st => { this.liveStationsMap[st.id] = st; });
+    return { success: true, offset, limit, stations: paged, isLocalFallback: true, rawCount: paged.length };
+  },
+
+  // Normalize station data format
+  normalizeStation(raw) {
+    if (!raw) return null;
+    const id = raw.stationuuid || String(raw.id || Math.random().toString(36).substring(2, 9));
+    const countryCode = (raw.countrycode || '').trim().toUpperCase();
+    const flag = countryCode ? RadioData.getCountryFlag(countryCode) : (raw.flag || '🌍');
+    const stream = raw.url_resolved || raw.url || raw.stream || '';
+    const name = (raw.name || 'Global FM Station').trim();
+    const color = raw.color || RadioData.getStationColor(name);
+    const tags = raw.tags || (Array.isArray(raw.category) ? raw.category.join(', ') : '');
+
+    return {
+      id: id,
+      stationuuid: raw.stationuuid || id,
+      name: name,
+      freq: raw.freq || (raw.bitrate ? `${raw.bitrate} kbps` : 'LIVE FM'),
+      city: raw.state || raw.city || raw.country || 'Global Airwaves',
+      country: raw.country || 'Worldwide',
+      countrycode: countryCode,
+      flag: flag,
+      category: tags ? tags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean) : ['pop'],
+      tags: tags,
+      stream: stream,
+      url: raw.url || stream,
+      url_resolved: stream,
+      favicon: raw.favicon || '',
+      homepage: raw.homepage || '',
+      color: color,
+      votes: raw.votes || 0,
+      codec: raw.codec || 'MP3',
+      bitrate: raw.bitrate || 128,
+      description: raw.description || `${tags ? tags.split(',').slice(0, 3).join(' • ') : 'Live Global Radio Broadcast'}`
+    };
+  },
+
+  // Convert ISO 3166-1 alpha-2 country code to emoji flag
+  getCountryFlag(code) {
+    if (!code || code.length !== 2) return '🌍';
+    try {
+      const codePoints = code.toUpperCase().split('').map(c => 127397 + c.charCodeAt(0));
+      return String.fromCodePoint(...codePoints);
+    } catch (e) {
+      return '🌍';
+    }
+  },
+
+  // Color generator
+  getStationColor(name) {
+    const ACCENT_COLORS = ['#ff4757', '#ffa502', '#2ed573', '#1e90ff', '#9b59b6', '#e056fd', '#00d2d3', '#fc5c65', '#26de81', '#45aaf2'];
+    let hash = 0;
+    for (let i = 0; i < (name || '').length; i++) {
+      hash = (hash << 5) - hash + name.charCodeAt(i);
+      hash |= 0;
+    }
+    return ACCENT_COLORS[Math.abs(hash) % ACCENT_COLORS.length];
   }
 
 };
+
+// Clean minimalist inline SVG radio icon fallback (Data URI) for broken/http/empty favicons
+const RADIO_SVG_FALLBACK = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48' width='48' height='48'%3E%3Crect width='48' height='48' rx='12' fill='%23181a24'/%3E%3Ccircle cx='24' cy='24' r='16' stroke='%23c8a876' stroke-width='2' stroke-opacity='0.3'/%3E%3Ccircle cx='24' cy='24' r='10' stroke='%23c8a876' stroke-width='2'/%3E%3Ccircle cx='24' cy='24' r='4' fill='%23c8a876'/%3E%3Cline x1='14' y1='34' x2='22' y2='13' stroke='%23f3f2ee' stroke-width='2.2' stroke-linecap='round'/%3E%3Ccircle cx='22' cy='13' r='2.5' fill='%23f3f2ee'/%3E%3C/svg%3E";
+
+// REQUIREMENT 3: Load station logo from station.favicon. If empty, starts with http://, or triggers onError, replace with clean SVG fallback
+function getStationFavicon(station) {
+  if (!station || !station.favicon || typeof station.favicon !== 'string') {
+    return RADIO_SVG_FALLBACK;
+  }
+  const fav = station.favicon.trim();
+  if (!fav || !fav.startsWith('https://')) {
+    return RADIO_SVG_FALLBACK;
+  }
+  return fav;
+}
 
 // Populate remaining nowPlayingData dynamically for IDs 22 to 161
 for (let i = 22; i <= 161; i++) {

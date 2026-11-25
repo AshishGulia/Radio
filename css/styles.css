@@ -5265,6 +5265,314 @@ header {
   text-overflow: ellipsis;
 }
 
+/* ── RADIO-BROWSER LIVE STATIONS & STATUS INDICATORS ─────────────────── */
+.row-station-logo-box {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+.row-station-logo-img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+.row-flag-badge {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  font-size: 0.72rem;
+  line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.7));
+}
+
+.row-name-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.row-station-sub-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  flex-wrap: wrap;
+}
+
+.row-bitrate-pill, .row-codec-pill {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+}
+
+/* REQUIREMENT 4: Green Blinking Live Music & Solid Red Ad/Talk/News Badges */
+.status-indicator-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.status-indicator-badge.status-green {
+  background: rgba(46, 213, 115, 0.15);
+  color: #2ed573;
+  border: 1px solid rgba(46, 213, 115, 0.35);
+}
+
+.status-indicator-badge.status-red {
+  background: rgba(255, 71, 87, 0.15);
+  color: #ff4757;
+  border: 1px solid rgba(255, 71, 87, 0.35);
+}
+
+.status-indicator-badge-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 12px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+
+.status-indicator-badge-mini.status-green {
+  background: rgba(46, 213, 115, 0.16);
+  color: #2ed573;
+}
+
+.status-indicator-badge-mini.status-red {
+  background: rgba(255, 71, 87, 0.16);
+  color: #ff4757;
+}
+
+.indicator-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* Green Dot: Blinking */
+.status-green .indicator-dot,
+.status-indicator-badge-mini.status-green .indicator-dot {
+  background: #2ed573;
+  box-shadow: 0 0 8px #2ed573;
+  animation: blink-green-dot 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Red Dot: Solid (No blink) */
+.status-red .indicator-dot,
+.status-indicator-badge-mini.status-red .indicator-dot {
+  background: #ff4757;
+  box-shadow: none;
+}
+
+@keyframes blink-green-dot {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.25;
+    transform: scale(0.8);
+  }
+}
+
+/* Country & Genre Filter Chips */
+.filter-chips-section {
+  padding: 0 16px;
+  margin-bottom: 2px;
+}
+.filter-section-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chips-scroll-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+.chips-scroll-row::-webkit-scrollbar { display: none; }
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+.filter-chip:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+.filter-chip.active {
+  background: rgba(200, 168, 118, 0.18);
+  border-color: var(--accent);
+  color: var(--accent-light);
+  box-shadow: 0 0 10px rgba(200, 168, 118, 0.2);
+}
+.chip-flag { font-size: 0.95rem; }
+.chip-icon { font-size: 0.75rem; color: var(--accent); }
+
+/* Live Stream Feed Header */
+.live-feed-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 8px;
+}
+.feed-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.feed-pulse-dot {
+  width: 8px;
+  height: 8px;
+  background: #2ed573;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #2ed573;
+  animation: blink-green-dot 1.2s infinite;
+}
+.feed-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.feed-count-pill {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+/* REQUIREMENT 1: Load More Button (+50) */
+.load-more-container {
+  padding: 16px 16px 84px;
+  display: flex;
+  justify-content: center;
+}
+.load-more-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 13px 20px;
+  background: linear-gradient(135deg, rgba(200, 168, 118, 0.2), rgba(200, 168, 118, 0.08));
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--accent-light);
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--btn-shadow);
+  transition: all 0.2s ease;
+}
+.load-more-btn:hover {
+  background: linear-gradient(135deg, rgba(200, 168, 118, 0.3), rgba(200, 168, 118, 0.15));
+  transform: translateY(-1px);
+  box-shadow: var(--btn-shadow-hover);
+}
+.load-more-btn:active {
+  transform: translateY(1px);
+}
+.load-more-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* REQUIREMENT 2: Offline Status Alert & Mini text */
+.player-offline-notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 6px 16px 10px;
+  padding: 8px 12px;
+  background: rgba(255, 71, 87, 0.15);
+  border: 1px solid rgba(255, 71, 87, 0.35);
+  border-radius: var(--radius-xs);
+  color: #ff4757;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.mini-offline-text {
+  color: #ff4757;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.mini-station-logo-img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+}
+.player-channel-logo-img {
+  width: 76px;
+  height: 76px;
+  object-fit: contain;
+  border-radius: 12px;
+}
+.player-logo-img-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 8px 0 6px;
+}
+
+/* REQUIREMENT 5: Lyrics Display in Drawer */
+.lyrics-empty-notice, .lyrics-loading {
+  text-align: center;
+  padding: 40px 20px;
+}
+
 
 
 

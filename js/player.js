@@ -32,13 +32,16 @@ const Player = (() => {
     });
 
     audio.addEventListener('error', () => {
-      showToast('Live stream connecting or reconnecting…', 'info');
-      // Keep isPlaying true in UI simulation for pleasant demo experience
-      isPlaying = true;
-      AppState.isPlaying = true;
+      showBuffering(false);
+      isPlaying = false;
+      AppState.isPlaying = false;
       updatePlayButton();
+      stopWaveAnimation();
+      if (currentStation) currentStation.isOffline = true;
+      // REQUIREMENT 2: Stop loading and show clean status message
+      showToast('Station currently offline, try another.', 'error');
+      showOfflineStatusBanner();
       updateMiniPlayer();
-      startWaveAnimation();
       updateMediaSession();
     });
 
@@ -48,15 +51,27 @@ const Player = (() => {
 
     audio.addEventListener('canplay', () => {
       showBuffering(false);
+      if (currentStation) currentStation.isOffline = false;
+      hideOfflineStatusBanner();
     });
 
     setupSwipeGestures();
     setupMediaSessionHandlers();
   }
 
+  function showOfflineStatusBanner() {
+    const banner = document.getElementById('playerOfflineBanner');
+    if (banner) banner.style.display = 'flex';
+  }
+
+  function hideOfflineStatusBanner() {
+    const banner = document.getElementById('playerOfflineBanner');
+    if (banner) banner.style.display = 'none';
+  }
+
   function play(station, forceOpen = false) {
     if (!station) return;
-    const isSameStation = currentStation && currentStation.id === station.id;
+    const isSameStation = currentStation && (currentStation.id === station.id || (station.stationuuid && currentStation.stationuuid === station.stationuuid));
 
     if (isSameStation && isPlaying) {
       pause();
@@ -70,7 +85,7 @@ const Player = (() => {
     if (!AppState.stationList || !AppState.stationList.length) {
       AppState.stationList = (typeof RadioData !== 'undefined' && RadioData.stations) ? RadioData.stations : [station];
     }
-    const idx = AppState.stationList.findIndex(s => s.id === station.id);
+    const idx = AppState.stationList.findIndex(s => s.id === station.id || (station.stationuuid && s.stationuuid === station.stationuuid));
     if (idx !== -1) {
       AppState.stationIndex = idx;
     } else {
@@ -78,21 +93,39 @@ const Player = (() => {
       AppState.stationIndex = AppState.stationList.length - 1;
     }
 
+    // REQUIREMENT 2: Play selected station in HTML5 <audio> using station.url_resolved
+    const streamUrl = station.url_resolved || station.stream || station.url;
+
+    if (!streamUrl || !streamUrl.startsWith('https://')) {
+      station.isOffline = true;
+      isPlaying = false;
+      AppState.isPlaying = false;
+      showBuffering(false);
+      updatePlayButton();
+      showToast('Station currently offline, try another.', 'error');
+      renderPlayerScreen(station);
+      showOfflineStatusBanner();
+      updateMiniPlayer();
+      return;
+    }
+
     if (audio) {
+      showBuffering(true);
       audio.pause();
-      audio.src = station.stream;
+      audio.src = streamUrl;
       audio.load();
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         playPromise.catch(() => {
-          // Autoplay policy or CORS - visually simulate playing
-          isPlaying = true;
-          AppState.isPlaying = true;
-          updatePlayButton();
-          updateMiniPlayer();
-          startWaveAnimation();
+          showBuffering(false);
+          // Handled gracefully if browser autoplay policy or stream offline
         });
       }
+    }
+
+    // REQUIREMENT 4: Poll stream metadata every 12 seconds for the active station
+    if (typeof NowPlaying !== 'undefined' && NowPlaying.setActiveStation) {
+      NowPlaying.setActiveStation(station);
     }
 
     renderPlayerScreen(station);
@@ -109,12 +142,6 @@ const Player = (() => {
     updateMediaSession(station);
     if (typeof CarMode !== 'undefined' && CarMode.isOpen()) CarMode.render();
     if (typeof LyricsEngine !== 'undefined' && LyricsEngine.isOpen()) LyricsEngine.render();
-
-    // Occasional ad check
-    if (Math.random() < 0.12 && typeof AdSystem !== 'undefined') {
-      setTimeout(() => AdSystem.tryShowAd('fullscreen'), 2000);
-    }
-  }
 
   function pause() {
     if (audio) audio.pause();
@@ -185,13 +212,10 @@ const Player = (() => {
     const screen = document.getElementById('player-screen');
     if (!screen) return;
 
-    const isFav = AppState.favourites.includes(station.id);
-    const status = NowPlaying.getStatus(station.id);
+    const isFav = AppState.favourites && AppState.favourites.includes(station.id);
     const songInfo = NowPlaying.getSongInfo(station.id);
     const volume = audio.volume;
     const isPlaying = !audio.paused;
-    const initials = station.name.split(' ').map(w=>w[0]).join('').slice(0,3);
-    const noteClass = status === 'music' ? 'note-green' : 'note-red';
 
     const wpUrl = (typeof AppState !== 'undefined' && AppState.settings && AppState.settings.wallpaper) || null;
 
@@ -209,7 +233,7 @@ const Player = (() => {
           </button>
           <div class="player-header-title-box">
             <span class="player-header-title">${station.freq || 'LIVE FM'} • ON AIR</span>
-            <span class="player-header-sub">${station.flag} ${station.city}, ${station.country}</span>
+            <span class="player-header-sub">${station.flag || '🌍'} ${station.city}, ${station.country}</span>
           </div>
           <div class="player-header-right-btns">
             <button class="icon-btn lyrics-btn" onclick="LyricsEngine.open()" aria-label="Live Song Lyrics" title="Live Song Lyrics & Translations">
@@ -218,25 +242,31 @@ const Player = (() => {
             <button class="icon-btn car-mode-btn" onclick="CarMode.open()" aria-label="CarPlay & Android Auto Car Mode" title="Car Mode (CarPlay / Android Auto)">
               <i class="fas fa-car"></i>
             </button>
-            <button class="icon-btn" onclick="shareStation(${station.id})" aria-label="Share">
+            <button class="icon-btn" onclick="shareStation('${station.id}')" aria-label="Share">
               <i class="fas fa-share-alt"></i>
             </button>
           </div>
         </div>
 
+        <!-- OFFLINE STATUS BANNER (REQUIREMENT 2) -->
+        <div id="playerOfflineBanner" class="player-offline-notice" style="display:${station.isOffline ? 'flex' : 'none'};">
+          <i class="fas fa-exclamation-triangle"></i>
+          <span>Station currently offline, try another.</span>
+        </div>
+
         <!-- 50% TOP PART: CHANNEL LOGO + JUST NICHE SAME SIZE SONG THUMBNAIL -->
         <div class="player-dual-showcase">
-          <!-- TOP 50% PART: PURE FM CHANNEL LOGO -->
-          <div class="player-channel-logo-card" style="background: linear-gradient(135deg, ${station.color}, #10101c); border-color: ${station.color}77;">
+          <!-- TOP 50% PART: PURE FM CHANNEL LOGO WITH FALLBACK (REQUIREMENT 3) -->
+          <div class="player-channel-logo-card" style="background: linear-gradient(135deg, ${station.color}33, #10101c); border-color: ${station.color}77;">
             <div class="player-tuner-ring"></div>
             <div class="player-emblem-badge"><i class="fas fa-broadcast-tower"></i> ${station.freq || 'LIVE FM'}</div>
-            <span class="player-logo-initials">${initials}</span>
-            <span class="player-logo-station-name">${station.name}</span>
-            <div class="player-logo-dial">
-              <span class="dial-dot"></span>
-              <span class="dial-line"></span>
-              <span class="dial-dot"></span>
+            <div class="player-logo-img-wrapper">
+              <img class="player-channel-logo-img"
+                   src="${getStationFavicon(station)}"
+                   alt="${station.name}"
+                   onerror="this.onerror=null;this.src='${RADIO_SVG_FALLBACK}';" />
             </div>
+            <span class="player-logo-station-name">${station.name}</span>
             <div class="wave-container ${isPlaying ? 'playing' : ''}" id="waveContainer">
               <div class="wave-bar"></div><div class="wave-bar"></div>
               <div class="wave-bar"></div><div class="wave-bar"></div>
@@ -245,9 +275,14 @@ const Player = (() => {
             </div>
           </div>
 
-          <!-- JUST NICHE: SAME SIZE SONG THUMBNAIL -->
+          <!-- JUST NICHE: SAME SIZE SONG THUMBNAIL WITH REAL ARTWORK -->
           <div class="player-song-thumb-card" onclick="Player.connectApp('spotify','${escapeQuotes(station.name)}','${escapeQuotes(songInfo.song)}','${escapeQuotes(songInfo.artist)}')" title="Click to open song in Spotify / YouTube Music">
-            <img class="player-song-album-img" src="${songInfo.thumb}" alt="${songInfo.song}" loading="lazy" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80';" />
+            <img class="player-song-album-img"
+                 id="playerMainSongThumb"
+                 src="${songInfo.thumb}"
+                 alt="${songInfo.song}"
+                 loading="lazy"
+                 onerror="this.onerror=null;this.src='${RADIO_SVG_FALLBACK}';" />
             <div class="player-song-sync-pill">
               <i class="fab fa-spotify"></i>
               <i class="fab fa-youtube"></i>
@@ -260,19 +295,20 @@ const Player = (() => {
           <div class="player-song-meta-left">
             <h2 class="player-main-song-title" id="playerSongName">${songInfo.song}</h2>
             <p class="player-main-artist-name" id="playerArtistName"><i class="fas fa-microphone-alt"></i> ${songInfo.artist}</p>
-            <span class="player-station-tagline">${station.flag} ${station.name} • ${station.city}</span>
+            <span class="player-station-tagline">${station.flag || '🌍'} ${station.name} • ${station.city}</span>
           </div>
-          <button class="fav-btn ${isFav ? 'active' : ''}" onclick="openCollectionModal(${station.id})" id="playerFavBtn" aria-label="Save to Collection">
+          <button class="fav-btn ${isFav ? 'active' : ''}" onclick="openCollectionModal('${station.id}')" id="playerFavBtn" aria-label="Save to Collection">
             <i class="fa${isFav ? 's' : 'r'} fa-heart"></i>
           </button>
         </div>
 
-        <!-- STATUS ROW: ONLY MUSIC LOGO (GREEN BLINK OR RED NON-GLOWING) + ON AIR (NO 'GANA CHAL RA HAI' TEXT) -->
-        <div class="player-status-row">
-          <span class="player-music-status-pill">
-            <i class="fas fa-music player-music-note ${noteClass}"></i>
+        <!-- STATUS ROW: GREEN BLINKING LIVE MUSIC OR SOLID RED AD / TALK / NEWS (REQUIREMENT 4) -->
+        <div class="player-status-row" id="playerStatusRow">
+          <span class="status-indicator-badge ${songInfo.badgeClass}">
+            <span class="indicator-dot"></span>
+            <span>${songInfo.badgeText}</span>
           </span>
-          <span class="live-label"><i class="fas fa-circle live-dot-icon"></i> ON AIR</span>
+          <span class="live-label"><i class="fas fa-broadcast-tower"></i> ON AIR</span>
         </div>
 
         <!-- PLAYBACK CONTROLS -->
@@ -299,17 +335,18 @@ const Player = (() => {
           <span class="volume-pct" id="volumePct">${Math.round(volume*100)}%</span>
         </div>
 
-        <!-- DEDICATED LYRICS & BILINGUAL TRANSLATION SHORTCUT -->
+        <!-- DEDICATED LYRICS SHORTCUT (REQUIREMENT 5) -->
         <div class="player-lyrics-shortcut" onclick="LyricsEngine.open()">
           <div class="lyrics-shortcut-left">
-            <i class="fas fa-align-left lyrics-shortcut-icon"></i>
+            <i class="fas fa-quote-left lyrics-shortcut-icon"></i>
             <div class="lyrics-shortcut-meta">
-              <strong>Song Lyrics & Translations</strong>
-              <small>Original Lyrics + Top 100 Languages (Default: English)</small>
+              <strong>Auto-Fetched Song Lyrics</strong>
+              <small>LRCLIB Live Synchronized Lyrics • Instant View</small>
             </div>
           </div>
-          <span class="lyrics-shortcut-pill"><i class="fas fa-language"></i> View Lyrics</span>
+          <span class="lyrics-shortcut-pill"><i class="fas fa-align-left"></i> View Lyrics</span>
         </div>
+
 
         <!-- CONNECT TO SPOTIFY / YT MUSIC / SOUNDCLOUD / OTHERS SECTION -->
         <div class="player-connect-section">
@@ -460,25 +497,34 @@ const Player = (() => {
     const freqBand = currentStation.freq && currentStation.freq.includes('AM') ? 'AM' : 'FM';
 
     mini.innerHTML = `
-      <!-- CHANNEL LOGO (TAP TO OPEN MAIN PLAYER) -->
+      <!-- CHANNEL LOGO WITH FALLBACK (TAP TO OPEN MAIN PLAYER) -->
       <div class="mini-art mini-logo-btn" onclick="event.stopPropagation(); Player.openPlayerScreen();"
            title="Tap Channel Logo to Open Main Player"
-           style="background: linear-gradient(135deg, ${currentStation.color}, #111122); border: 1.5px solid ${currentStation.color}66;">
-        <span class="mini-freq-num">${freqClean}</span>
-        <span class="mini-freq-band">${freqBand}</span>
+           style="background: linear-gradient(135deg, ${currentStation.color}44, #111122); border: 1.5px solid ${currentStation.color}66;">
+        <img class="mini-station-logo-img"
+             src="${getStationFavicon(currentStation)}"
+             alt="${currentStation.name}"
+             onerror="this.onerror=null;this.src='${RADIO_SVG_FALLBACK}';" />
         <span class="mini-expand-badge"><i class="fas fa-chevron-up"></i></span>
       </div>
 
       <!-- STATION INFO -->
-      <div class="mini-info">
+      <div class="mini-info" onclick="Player.openPlayerScreen();">
         <span class="mini-name">${currentStation.name}</span>
-        <span class="mini-song"><i class="fas fa-music"></i> ${songInfo.song} • <em>${songInfo.artist}</em></span>
+        ${currentStation.isOffline ? `
+          <span class="mini-offline-text"><i class="fas fa-exclamation-circle"></i> Station currently offline, try another.</span>
+        ` : `
+          <span class="mini-song">
+            <span class="status-indicator-badge-mini ${songInfo.badgeClass}"><span class="indicator-dot"></span></span>
+            ${songInfo.song} • <em>${songInfo.artist}</em>
+          </span>
+        `}
       </div>
 
       <!-- PLAYBACK CONTROLS (WORK DIRECTLY ON MINIMIZED BAR) -->
       <div class="mini-controls">
         <button class="icon-btn mini-ctrl-btn mini-fav-btn ${isFav ? 'active' : ''}" id="miniFavBtn"
-                onclick="event.stopPropagation(); openCollectionModal(${currentStation.id});"
+                onclick="event.stopPropagation(); openCollectionModal('${currentStation.id}');"
                 aria-label="Save to Favourites" title="${isFav ? 'Saved in Favourites' : 'Add to Favourites'}">
           <i class="fa${isFav ? 's' : 'r'} fa-heart"></i>
         </button>
