@@ -368,21 +368,24 @@ function shareStation(stationId) {
 function buildStationCard(station, opts = {}) {
   const isFav = AppState.favourites.includes(station.id);
   const status = NowPlaying.getStatus(station.id);
-  // Music note icon: green if song playing, red if ad or podcast
   const noteClass = status === 'music' ? 'note-green' : 'note-red';
+  const statusBorderClass = status === 'music' ? 'live-music-active' : 'live-ad-active';
 
   return `
     <div class="station-row" onclick="App.openStation(${station.id})" data-station-id="${station.id}">
-      <!-- FREQUENCY BADGE as logo (original station identity) -->
-      <div class="row-freq-logo" style="background:${station.color}">
+      <!-- FREQUENCY BADGE as logo with active live green / red ad indicator -->
+      <div class="row-freq-logo ${statusBorderClass}" style="background:${station.color}">
         <span class="freq-num">${(station.freq || 'FM').replace(' FM','').replace(' AM','')}</span>
-        <span class="freq-band">${station.freq && station.freq.includes('AM') ? 'AM' : 'FM'}</span>
+        <span class="freq-band">${station.flag}</span>
       </div>
 
-      <!-- STATION NAME + ANIMATED MUSIC NOTE ICON -->
+      <!-- STATION NAME + SUBTEXT + ANIMATED MUSIC NOTE ICON -->
       <div class="row-name-wrap">
-        <i class="fas fa-music row-music-note ${noteClass}" title="${status === 'music' ? 'Song playing' : status === 'podcast' ? 'Podcast on air' : 'Ad break'}"></i>
-        <span class="row-station-name">${station.name}</span>
+        <i class="fas fa-music row-music-note ${noteClass}" title="${status === 'music' ? 'Song playing (Live)' : status === 'podcast' ? 'Podcast on air' : 'Ad break'}"></i>
+        <div class="row-text-block">
+          <span class="row-station-name">${station.name}</span>
+          <span class="row-station-sub">${station.city}, ${station.country}</span>
+        </div>
       </div>
 
       <!-- FAV / COLLECTION SAVE BUTTON -->
@@ -425,9 +428,9 @@ function buildScrollRow(title, stations, listId) {
         <h3 class="row-title">${title}</h3>
         <button class="see-all" onclick="App.openList('${listId}')">See all <i class="fas fa-chevron-right"></i></button>
       </div>
-      <!-- 2 ROWS OF CHANNELS (horizontal 2-row multi-line scroll) -->
+      <!-- 2 ROWS OF CHANNELS (horizontal 2-row multi-line scroll, max 10 channels) -->
       <div class="cards-scroll-2rows" id="scroll-${listId}">
-        ${stations.slice(0, 16).map(s => buildStationCard(s)).join('')}
+        ${stations.slice(0, 10).map(s => buildStationCard(s)).join('')}
       </div>
     </div>`;
 }

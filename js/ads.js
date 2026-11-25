@@ -79,51 +79,8 @@ const AdSystem = (() => {
   }
 
   function showFullscreen() {
-    if (isPremium()) return;
-    if (isFullscreenOpen) return;
-    const pref = getPreference();
-    if (pref === 'no-ads') return;
-
-    const ad = getRandomAd('fullscreen');
-    if (!ad) return;
-
-    const overlay = document.getElementById('ad-fullscreen');
-    if (!overlay) return;
-
-    overlay.innerHTML = `
-      <div class="ad-fullscreen-inner">
-        <div class="ad-fullscreen-top">
-          <span class="ad-label-big">Advertisement</span>
-          <button class="ad-skip" id="adSkipBtn" disabled>Skip in 5s</button>
-        </div>
-        <img src="${ad.image}" alt="Ad" class="ad-fullscreen-img" />
-        <div class="ad-fullscreen-body">
-          <p class="ad-fullscreen-text">${ad.text}</p>
-          <a class="btn-primary ad-fullscreen-cta" href="${ad.link}">${ad.cta}</a>
-        </div>
-      </div>`;
-
-    overlay.classList.add('visible');
-    isFullscreenOpen = true;
-
-    // Enable skip after 5 seconds
-    let countdown = 5;
-    const skipBtn = document.getElementById('adSkipBtn');
-    const timer = setInterval(() => {
-      countdown--;
-      if (skipBtn) {
-        if (countdown <= 0) {
-          skipBtn.textContent = 'Skip Ad ✕';
-          skipBtn.disabled = false;
-          skipBtn.onclick = closeFullscreen;
-          clearInterval(timer);
-        } else {
-          skipBtn.textContent = `Skip in ${countdown}s`;
-        }
-      } else {
-        clearInterval(timer);
-      }
-    }, 1000);
+    // Redirect all popup/fullscreen ads to lower ribbon banner
+    showBanner();
   }
 
   function closeFullscreen() {
@@ -180,8 +137,7 @@ const AdSystem = (() => {
   function init() {
     if (!isPremium()) {
       startAdCycle();
-      // Show a banner immediately on first load after short delay
-      setTimeout(showBanner, 8000);
+      showBanner();
     }
   }
 

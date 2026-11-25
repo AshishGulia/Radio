@@ -465,16 +465,20 @@ header {
 /* ── AD BANNER ──────────────────────────────────────────────────────────── */
 #ad-banner {
   position: fixed;
-  bottom: calc(var(--nav-h) + var(--mini-h) + var(--safe-bottom));
+  bottom: var(--nav-h);
   left: 50%;
   transform: translateX(-50%) translateY(100%);
   width: 100%;
   max-width: 420px;
   z-index: 198;
-  transition: transform var(--transition);
+  transition: transform var(--transition), bottom var(--transition);
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+#ad-banner.above-mini {
+  bottom: calc(var(--nav-h) + var(--mini-h));
 }
 
 #ad-banner.visible {
@@ -5236,6 +5240,31 @@ header {
   font-size: 0.95rem;
   flex-shrink: 0;
 }
+
+/* ── Live Music & Ad Channel Indicator Shadows (No Outlines) ───────────── */
+.row-freq-logo.live-music-active {
+  box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+}
+.row-freq-logo.live-ad-active {
+  box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+}
+
+.row-text-block {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.row-station-sub {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  display: block;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 
 
 

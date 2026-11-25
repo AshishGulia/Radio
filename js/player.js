@@ -428,6 +428,8 @@ const Player = (() => {
       screen.classList.add('open');
       document.body.classList.add('player-open');
     }
+    const adBanner = document.getElementById('ad-banner');
+    if (adBanner) adBanner.classList.remove('above-mini');
   }
 
   function closePlayerScreen() {
@@ -437,14 +439,18 @@ const Player = (() => {
       document.body.classList.remove('player-open');
     }
     updateMiniPlayer();
+    const adBanner = document.getElementById('ad-banner');
+    if (adBanner && currentStation) adBanner.classList.add('above-mini');
   }
 
   function updateMiniPlayer() {
     const mini = document.getElementById('mini-player');
+    const adBanner = document.getElementById('ad-banner');
     if (!mini) return;
 
     if (!currentStation) {
       mini.classList.remove('visible');
+      if (adBanner) adBanner.classList.remove('above-mini');
       return;
     }
 
@@ -488,6 +494,7 @@ const Player = (() => {
       </div>`;
 
     mini.classList.add('visible');
+    if (adBanner) adBanner.classList.add('above-mini');
   }
 
   function updatePlayButton() {
