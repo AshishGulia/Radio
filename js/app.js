@@ -349,7 +349,7 @@ function shareStation(stationId) {
   const station = RadioData.getById(stationId);
   if (!station) return;
   const songInfo = NowPlaying.getSongInfo(stationId);
-  const shareText = `Listening to ${station.name} (${station.city}) on RadioWave! Now playing: "${songInfo.song}" by ${songInfo.artist}`;
+  const shareText = `Listening to ${station.name} (${station.city}) on RadioTym! Now playing: "${songInfo.song}" by ${songInfo.artist}`;
 
   if (navigator.share) {
     navigator.share({

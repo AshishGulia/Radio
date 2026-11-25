@@ -549,7 +549,7 @@ const Player = (() => {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: (si && si.song) || st.name,
         artist: (si && si.artist) || `${st.city}, ${st.country}`,
-        album: `${st.name} (${st.freq || 'Live FM'}) • RadioWave CarPlay`,
+        album: `${st.name} (${st.freq || 'Live FM'}) • RadioTym Car Mode`,
         artwork: [
           { src: art, sizes: '96x96', type: 'image/jpeg' },
           { src: art, sizes: '128x128', type: 'image/jpeg' },

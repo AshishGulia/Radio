@@ -1,4 +1,4 @@
-# RadioWave 📻
+# RadioTym 📻
 
 A modern, responsive web application for streaming live global and local radio stations with a luxury aesthetic, tactile controls, and rich media playback.
 
@@ -6,7 +6,7 @@ A modern, responsive web application for streaming live global and local radio s
 
 ## Highlights
 
-- **Worldwide Radio Streaming**: Access a curated collection of local Indian and international live radio stations across multiple genres.
+- **Worldwide Radio Streaming**: Access a curated collection of local Indian and international live radio stations across multiple music genres.
 - **Dynamic Frosted Player**: Layered backdrop with opaque frosted glass blur adapting dynamically to active theme and background wallpapers.
 - **Tactile UI Controls**: Physical depth shadows, responsive elevation transitions, and luxury champagne-gold color accents.
 - **Car Mode (CarPlay / Android Auto Friendly)**: High-contrast OLED interface with oversized touch targets and driver-friendly playback controls.
@@ -20,7 +20,7 @@ A modern, responsive web application for streaming live global and local radio s
 ## Directory Structure
 
 ```
-Radio/
+RadioTym/
 ├── index.html              # Main application entry point
 ├── css/
 │   ├── styles.css          # Core design system, variables, layouts & themes

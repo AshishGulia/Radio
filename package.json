@@ -1,7 +1,7 @@
 {
-  "name": "radiowave",
+  "name": "radiotym",
   "version": "1.0.0",
-  "description": "RadioWave – Live radio from India and around the world",
+  "description": "RadioTym – Live music radio from India and around the world",
   "main": "server.js",
   "scripts": {
     "dev": "node server.js",

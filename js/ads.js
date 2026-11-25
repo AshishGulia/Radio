@@ -15,9 +15,9 @@ const AdSystem = (() => {
   }
 
   const defaultAds = [
-    { id: 'b1', type: 'banner', text: '🎵 Upgrade to RadioWave Premium for uninterrupted music & zero ads!', cta: 'Go Premium', link: '#settings' },
-    { id: 'b2', type: 'banner', text: '🎧 Discover top trending Hindi & Global hits right here on RadioWave.', cta: 'Explore', link: '#explore' },
-    { id: 'fs1', type: 'fullscreen', title: 'RadioWave Premium', text: 'Listen to thousands of live FM stations with studio-quality audio, no ads, and custom wallpapers.', cta: 'Try Premium Free', link: '#settings' }
+    { id: 'b1', type: 'banner', text: '🎵 Upgrade to RadioTym Premium for uninterrupted music & zero ads!', cta: 'Go Premium', link: '#settings' },
+    { id: 'b2', type: 'banner', text: '🎧 Discover top trending Hindi & Global hits right here on RadioTym.', cta: 'Explore', link: '#explore' },
+    { id: 'fs1', type: 'fullscreen', title: 'RadioTym Premium', text: 'Listen to thousands of live FM stations with studio-quality audio, no ads, and custom wallpapers.', cta: 'Try Premium Free', link: '#settings' }
   ];
 
   function getAdsPool() {
