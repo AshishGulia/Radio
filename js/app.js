@@ -725,7 +725,7 @@ function buildStationCard(station, opts = {}) {
              alt="${escapeHtml(station.name)}"
              loading="lazy"
              onerror="handleImageError(this)" />
-        <span class="row-flag-badge">${station.flag || '🌍'}</span>
+        <span class="row-flag-badge">${typeof getCountryFlagHtml === 'function' ? getCountryFlagHtml({ name: station.country, flag: station.flag, code: station.countrycode }, 'row-flag-img') : (station.flag || '🌍')}</span>
       </div>
 
       <!-- STATION NAME + SUBTEXT + LIVE SONG/AD STATUS BADGE (REQUIREMENT 4) -->
@@ -1216,10 +1216,17 @@ const App = {
     const userCountry = AppState.settings.country || 'India';
     const countryObj = (RadioData.countries || []).find(c => c.name.toLowerCase() === userCountry.toLowerCase());
     const flag = countryObj ? countryObj.flag : '🌍';
+    const divisionLabel = (RadioData.getDivisionLabel) ? RadioData.getDivisionLabel(userCountry) : 'States';
 
-    // Immediately show curated/preset states while fetching full live list of states
+    // Immediately show Wikipedia-accurate divisions while fetching station counts
     let states = RadioData.getStatesForCountry ? RadioData.getStatesForCountry(userCountry) : [];
-    if (!AppState.userState && states.length) {
+    const normalizedCurrent = (RadioData.normalizeStateAlias)
+      ? RadioData.normalizeStateAlias(userCountry, AppState.userState)
+      : AppState.userState;
+    const hasMatch = states.some(st => st.name.toLowerCase() === (normalizedCurrent || '').toLowerCase());
+    if (hasMatch) {
+      AppState.userState = normalizedCurrent;
+    } else if (states.length) {
       AppState.userState = states[0].name;
     }
     const selectedState = AppState.userState || (states[0] ? states[0].name : userCountry);
@@ -1227,7 +1234,6 @@ const App = {
     this.localStatesList = states;
 
     const renderStatesChips = (list, activeState) => {
-      // Put user's current state first or keep clean order with active highlight
       const sorted = [...list].sort((a, b) => {
         if (a.name.toLowerCase() === (activeState || '').toLowerCase()) return -1;
         if (b.name.toLowerCase() === (activeState || '').toLowerCase()) return 1;
@@ -1249,6 +1255,10 @@ const App = {
       }).join('');
     };
 
+    const headerFlagHtml = (typeof getCountryFlagHtml === 'function')
+      ? getCountryFlagHtml(countryObj || userCountry, 'header-flag-img')
+      : flag;
+
     content.innerHTML = `
       <div class="tab-content local-states-tab">
         <div class="local-states-header">
@@ -1256,16 +1266,16 @@ const App = {
             <i class="fas fa-arrow-left"></i>
           </button>
           <div class="local-states-title-wrap">
-            <h2 class="list-title">${flag} ${escapeHtml(userCountry)} States</h2>
-            <span class="home-section-sub">Select any state to listen to local radio channels inside it</span>
+            <h2 class="list-title" style="display:flex;align-items:center;gap:6px;">${headerFlagHtml} <span>${escapeHtml(userCountry)} ${escapeHtml(divisionLabel)}</span></h2>
+            <span class="home-section-sub">Select any region to listen to local radio channels inside it</span>
           </div>
-          <span class="state-badge-count" id="statesCountBadge">${states.length || 1} States</span>
+          <span class="state-badge-count" id="statesCountBadge">${states.length || 1} ${escapeHtml(divisionLabel)}</span>
         </div>
 
         <div class="state-search-bar">
           <i class="fas fa-search"></i>
           <input type="text" id="localStateSearchInput"
-                 placeholder="Search states in ${escapeHtml(userCountry)}…"
+                 placeholder="Search ${escapeHtml(divisionLabel.toLowerCase())} in ${escapeHtml(userCountry)}…"
                  oninput="App.filterLocalStates(this.value)" />
         </div>
 
@@ -1288,7 +1298,7 @@ const App = {
     // Load stations for active state right away
     this.loadStationsForState(userCountry, selectedState);
 
-    // Fetch live list of all states in this country from Radio-Browser & merge
+    // Fetch live station counts per Wikipedia division from Radio-Browser
     if (RadioData.fetchStatesForCountry) {
       const liveStates = await RadioData.fetchStatesForCountry(userCountry);
       if (liveStates && liveStates.length) {
@@ -1301,7 +1311,7 @@ const App = {
           if (qInput && qInput.value.trim()) this.filterLocalStates(qInput.value);
         }
         if (countBadge) {
-          countBadge.textContent = `${liveStates.length} States`;
+          countBadge.textContent = `${liveStates.length} ${divisionLabel}`;
         }
       }
     }
@@ -1341,33 +1351,48 @@ const App = {
 
     const apiCountry = RadioData.getCountryApiName ? RadioData.getCountryApiName(country) : country;
     const countryCode = RadioData.getCountryCode ? RadioData.getCountryCode(country) : '';
+    const canonicalState = RadioData.normalizeStateAlias ? RadioData.normalizeStateAlias(country, stateName) : stateName;
+
+    const divisions = RadioData.getStatesForCountry ? RadioData.getStatesForCountry(country) : [];
+    const normFn = RadioData.normalizeGeoText ? (v) => RadioData.normalizeGeoText(v) : (v) => String(v || '').toLowerCase().trim();
+    const stateObj = divisions.find(st => normFn(st.name) === normFn(canonicalState));
+    const majorCities = (stateObj && Array.isArray(stateObj.cities))
+      ? stateObj.cities.filter(c => normFn(c) && normFn(c) !== normFn(canonicalState)).slice(0, 2)
+      : [];
 
     // 1. Curated stations matching state/cities
-    const curated = RadioData.getStationsByState ? RadioData.getStationsByState(country, stateName) : [];
+    const curated = RadioData.getStationsByState ? RadioData.getStationsByState(country, canonicalState) : [];
 
-    // 2. Live HTTPS stations for this state from Radio-Browser API
+    // 2. Live HTTPS stations for this state & its major cities from Radio-Browser API
     let live = [];
     try {
       const res = await RadioData.fetchLiveStations({
         country: apiCountry,
         countrycode: countryCode,
-        state: stateName,
+        state: canonicalState,
         limit: 50
       });
       if (res && !res.isLocalFallback && res.stations) {
         live = res.stations;
       }
-      // If strict `state` returned fewer than 5 results, also search by city/state name inside country
-      if (live.length < 5) {
-        const resByName = await RadioData.fetchLiveStations({
-          country: apiCountry,
-          countrycode: countryCode,
-          query: stateName,
-          limit: 30
+
+      // If strict `state` returned fewer than 8 results, also query state name & top major cities in parallel
+      if (live.length < 8) {
+        const searchTerms = [canonicalState, ...majorCities];
+        const extraPromises = searchTerms.map(term =>
+          RadioData.fetchLiveStations({
+            country: apiCountry,
+            countrycode: countryCode,
+            query: term,
+            limit: 25
+          }).catch(() => null)
+        );
+        const extraResults = await Promise.all(extraPromises);
+        extraResults.forEach(extra => {
+          if (extra && !extra.isLocalFallback && extra.stations) {
+            live = [...live, ...extra.stations];
+          }
         });
-        if (resByName && !resByName.isLocalFallback && resByName.stations) {
-          live = [...live, ...resByName.stations];
-        }
       }
     } catch (e) {}
 
@@ -1382,28 +1407,45 @@ const App = {
       combined.push(st);
     });
 
-    // If still empty for a small state/territory, fetch top live stations from that country as fallback note
+    // If still empty, scan top country stations for state/city matches before falling back to country stations
     if (!combined.length) {
       const countryRes = await RadioData.fetchLiveStations({
         country: apiCountry,
         countrycode: countryCode,
-        limit: 30
+        limit: 50
       });
-      const fallbackStations = (countryRes && countryRes.stations) ? countryRes.stations : RadioData.getByCountry(country);
+      const countryPool = (countryRes && countryRes.stations) ? countryRes.stations : RadioData.getByCountry(country);
+      const citySet = [canonicalState, ...(stateObj && stateObj.cities ? stateObj.cities : [])].map(normFn).filter(Boolean);
+      const localMatches = countryPool.filter(st => {
+        const blob = `${normFn(st.state)} ${normFn(st.city)} ${normFn(st.name)} ${normFn(st.tags)}`;
+        return citySet.some(term => term.length >= 3 && blob.includes(term));
+      });
+
+      if (localMatches.length) {
+        AppState.stationList = localMatches;
+        if (countEl) countEl.textContent = `${localMatches.length} radios`;
+        container.innerHTML = `
+          <div class="stations-list-view">
+            ${localMatches.map(s => buildStationCard(s)).join('')}
+          </div>`;
+        return;
+      }
+
+      const fallbackStations = countryPool;
       AppState.stationList = fallbackStations;
       if (countEl) countEl.textContent = `${fallbackStations.length} in ${country}`;
       if (!fallbackStations.length) {
         container.innerHTML = `
           <div class="empty-state">
             <i class="fas fa-broadcast-tower"></i>
-            <p>No radio channels found for ${escapeHtml(stateName)}</p>
-            <small>Try selecting another state above.</small>
+            <p>No radio channels found for ${escapeHtml(canonicalState)}</p>
+            <small>Try selecting another region above.</small>
           </div>`;
         return;
       }
       container.innerHTML = `
         <div class="genre-no-local-note" style="margin-bottom:12px;">
-          <i class="fas fa-info-circle"></i> Showing popular ${escapeHtml(country)} radio stations (state-specific streams unavailable for ${escapeHtml(stateName)}).
+          <i class="fas fa-info-circle"></i> Showing popular ${escapeHtml(country)} radio stations (state-specific streams unavailable for ${escapeHtml(canonicalState)}).
         </div>
         <div class="stations-list-view">
           ${fallbackStations.map(s => buildStationCard(s)).join('')}
@@ -1917,8 +1959,14 @@ const App = {
     const countryStates = (typeof RadioData !== 'undefined' && RadioData.getStatesForCountry)
       ? RadioData.getStatesForCountry(userCountry)
       : [];
-    if (!AppState.userState && countryStates.length) {
-      AppState.userState = countryStates[0].name;
+    const normalizedUserState = (typeof RadioData !== 'undefined' && RadioData.normalizeStateAlias)
+      ? RadioData.normalizeStateAlias(userCountry, AppState.userState)
+      : AppState.userState;
+    if (countryStates.length) {
+      const stateMatchesCountry = countryStates.some(
+        st => st.name.toLowerCase() === (normalizedUserState || '').toLowerCase()
+      );
+      AppState.userState = stateMatchesCountry ? normalizedUserState : countryStates[0].name;
     }
     const userState = AppState.userState || (countryStates[0] ? countryStates[0].name : userCountry);
 
@@ -2024,23 +2072,24 @@ const App = {
     if (!content) return;
 
     const topCountries = [
-      { name: "India",       flag: "🇮🇳" },
-      { name: "UK",          flag: "🇬🇧" },
-      { name: "USA",         flag: "🇺🇸" },
-      { name: "France",      flag: "🇫🇷" },
-      { name: "Germany",     flag: "🇩🇪" },
-      { name: "Brazil",      flag: "🇧🇷" },
-      { name: "Japan",       flag: "🇯🇵" },
-      { name: "Australia",   flag: "🇦🇺" },
-      { name: "Canada",      flag: "🇨🇦" },
-      { name: "UAE",         flag: "🇦🇪" },
-      { name: "Singapore",   flag: "🇸🇬" },
-      { name: "Italy",       flag: "🇮🇹" },
-      { name: "Spain",       flag: "🇪🇸" },
-      { name: "Russia",      flag: "🇷🇺" },
-      { name: "South Korea", flag: "🇰🇷" },
-    ];
+      { name: "India",       flag: "🇮🇳", code: "IN" },
+      { name: "UK",          flag: "🇬🇧", code: "GB" },
+      { name: "USA",         flag: "🇺🇸", code: "US" },
+      { name: "France",      flag: "🇫🇷", code: "FR" },
+      { name: "Germany",     flag: "🇩🇪", code: "DE" },
+      { name: "Brazil",      flag: "🇧🇷", code: "BR" },
+      { name: "Japan",       flag: "🇯🇵", code: "JP" },
+      { name: "Australia",   flag: "🇦🇺", code: "AU" },
+      { name: "Canada",      flag: "🇨🇦", code: "CA" },
+      { name: "UAE",         flag: "🇦🇪", code: "AE" },
+      { name: "Singapore",   flag: "🇸🇬", code: "SG" },
+      { name: "Italy",       flag: "🇮🇹", code: "IT" },
+      { name: "Spain",       flag: "🇪🇸", code: "ES" },
+      { name: "Russia",      flag: "🇷🇺", code: "RU" },
+      { name: "South Korea", flag: "🇰🇷", code: "KR" },
+    ].sort((a, b) => a.name.localeCompare(b.name));
 
+    const sortedCountries = [...(RadioData.countries || [])].sort((a, b) => a.name.localeCompare(b.name));
     let selectedCountry = AppState.browseCountry || 'India';
 
     content.innerHTML = `
@@ -2073,15 +2122,15 @@ const App = {
           </div>
         </div>
 
-        <!-- UPPER ROW: COUNTRY BUTTONS (India selected by default) -->
-        <div class="country-ribbon-label"><i class="fas fa-globe"></i> Popular Countries (Click to change):</div>
+        <!-- UPPER ROW: COUNTRY BUTTONS (Alphabetical A-Z with flags in front) -->
+        <div class="country-ribbon-label"><i class="fas fa-globe"></i> Popular Countries (A–Z):</div>
         <div class="country-tabs-scroll" id="countryTabsScroll">
           ${topCountries.map(c => `
             <button class="country-tab ${c.name === selectedCountry ? 'active' : ''}"
-                    onclick="App.selectBrowseCountry('${c.name}', this)"
-                    data-country="${c.name}">
-              <span class="ctab-flag">${c.flag}</span>
-              <span class="ctab-name">${c.name}</span>
+                    onclick="App.selectBrowseCountry('${escapeQuotes(c.name)}', this)"
+                    data-country="${escapeHtml(c.name)}">
+              <span class="ctab-flag">${typeof getCountryFlagHtml === 'function' ? getCountryFlagHtml(c, 'ctab-flag-img') : c.flag}</span>
+              <span class="ctab-name">${escapeHtml(c.name)}</span>
             </button>`).join('')}
         </div>
 
@@ -2093,12 +2142,12 @@ const App = {
           <button class="btn-outline expand-btn" onclick="App.toggleOtherCountries(this)">
             <span class="btn-left-content">
               <i class="fas fa-flag"></i>
-              <strong>All Countries (${RadioData.countries.length} World Countries)</strong>
+              <strong>All Countries (${sortedCountries.length} World Countries • A–Z)</strong>
             </span>
             <i class="fas fa-chevron-down expand-icon" id="otherCountriesIcon"></i>
           </button>
 
-          <!-- ALL COUNTRIES LIST WITH FLAGS IN FRONT OF NAMES -->
+          <!-- ALL COUNTRIES LIST WITH FLAGS IN FRONT OF NAMES (ALPHABETICAL A-Z BY DEFAULT) -->
           <div class="other-countries-list" id="otherCountriesList" style="display:none">
             <div class="country-search-bar">
               <i class="fas fa-search"></i>
@@ -2107,9 +2156,9 @@ const App = {
             </div>
 
             <div class="all-countries-grid" id="allCountriesGrid">
-              ${RadioData.countries.map(c => `
+              ${sortedCountries.map(c => `
                 <div class="all-country-item" onclick="App.selectBrowseCountry('${escapeQuotes(c.name)}')" data-country-name="${escapeHtml(c.name.toLowerCase())}">
-                  <span class="country-item-flag">${c.flag}</span>
+                  <span class="country-item-flag">${typeof getCountryFlagHtml === 'function' ? getCountryFlagHtml(c, 'country-item-flag-img') : c.flag}</span>
                   <span class="country-item-name">${escapeHtml(c.name)}</span>
                   <span class="country-station-tag">${RadioData.getByCountry(c.name).length} curated</span>
                   <i class="fas fa-chevron-right country-arrow"></i>
@@ -2211,8 +2260,13 @@ const App = {
       return;
     }
 
+    const badgeFlagHtml = (typeof getCountryFlagHtml === 'function')
+      ? getCountryFlagHtml(country, 'badge-flag-img')
+      : '';
+
     grid.innerHTML = `
       <div class="browse-country-badge">
+        ${badgeFlagHtml}
         <span>Live Stations in <strong>${escapeHtml(country)}</strong> — ${stations.length} channels</span>
       </div>
       <div class="stations-list-view">

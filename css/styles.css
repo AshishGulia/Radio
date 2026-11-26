@@ -1925,12 +1925,12 @@ header {
 
 .country-tab {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 4px;
-  min-width: 72px;
-  padding: 8px 10px;
-  border-radius: 14px;
+  gap: 8px;
+  min-width: auto;
+  padding: 8px 13px;
+  border-radius: 12px;
   border: 1.5px solid var(--border);
   background: var(--bg-card);
   cursor: pointer;
@@ -1945,12 +1945,52 @@ header {
 }
 
 .ctab-flag {
-  font-size: 1.45rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
   line-height: 1;
+  flex-shrink: 0;
+}
+
+.country-flag-img {
+  width: 22px;
+  height: 16px;
+  object-fit: cover;
+  border-radius: 3px;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.28);
+  vertical-align: middle;
+  display: inline-block;
+}
+
+.country-flag-emoji {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.ctab-flag-img {
+  width: 20px;
+  height: 14px;
+}
+
+.badge-flag-img {
+  width: 18px;
+  height: 13px;
+  margin-right: 4px;
+}
+
+.header-flag-img {
+  width: 22px;
+  height: 16px;
+  margin-right: 6px;
 }
 
 .ctab-name {
-  font-size: 0.68rem;
+  font-size: 0.78rem;
   color: var(--text-secondary);
   white-space: nowrap;
   font-weight: 600;
@@ -1963,6 +2003,9 @@ header {
 }
 
 .browse-country-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 0.78rem;
   color: var(--text-secondary);
   margin-bottom: 10px;
@@ -2072,7 +2115,11 @@ header {
 }
 
 .country-item-flag {
-  font-size: 1.4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  font-size: 1.25rem;
   line-height: 1;
   flex-shrink: 0;
 }
@@ -5291,7 +5338,16 @@ header {
   right: -4px;
   font-size: 0.72rem;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   filter: drop-shadow(0 1px 2px rgba(0,0,0,0.7));
+}
+
+.row-flag-img {
+  width: 16px;
+  height: 12px;
+  border-radius: 2px;
 }
 
 .row-name-top {

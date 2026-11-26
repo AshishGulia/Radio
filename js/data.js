@@ -3670,7 +3670,7 @@ countries: [
         ]
     },
     {
-        "name": "Jammu & Kashmir",
+        "name": "Jammu and Kashmir",
         "code": "JK",
         "cities": [
             "Srinagar",
@@ -3811,7 +3811,7 @@ countries: [
         ]
     },
     {
-        "name": "Andaman and Nicobar",
+        "name": "Andaman and Nicobar Islands",
         "code": "AN",
         "cities": [
             "Port Blair",
@@ -3897,7 +3897,14 @@ countries: [
     return this.stations.find(s => String(s.id) === String(id) || s.stationuuid === id);
   },
   getByCountry(country) {
-    return this.stations.filter(s => s.country && s.country.toLowerCase() === (country || '').toLowerCase());
+    const resolved = this.resolveCountryKey(country);
+    const normInput = this.normalizeGeoText(country);
+    const normResolved = this.normalizeGeoText(resolved);
+    return this.stations.filter(s => {
+      if (!s.country) return false;
+      const sc = this.normalizeGeoText(s.country);
+      return sc === normInput || sc === normResolved;
+    });
   },
   countryStatesMap: {
     'USA': ['California', 'New York', 'Texas', 'Florida', 'Illinois', 'Pennsylvania', 'Ohio', 'Georgia', 'North Carolina', 'Michigan', 'New Jersey', 'Virginia', 'Washington', 'Arizona', 'Massachusetts', 'Tennessee', 'Indiana', 'Missouri', 'Maryland', 'Wisconsin', 'Colorado', 'Minnesota', 'South Carolina', 'Alabama', 'Louisiana', 'Kentucky', 'Oregon', 'Oklahoma', 'Connecticut', 'Utah', 'Iowa', 'Nevada', 'Arkansas', 'Mississippi', 'Kansas', 'New Mexico', 'Nebraska', 'Idaho', 'West Virginia', 'Hawaii', 'New Hampshire', 'Maine', 'Montana', 'Rhode Island', 'Delaware', 'South Dakota', 'North Dakota', 'Alaska', 'Vermont', 'Wyoming', 'District of Columbia'],
@@ -3914,7 +3921,47 @@ countries: [
     'Bangladesh': ['Dhaka', 'Chattogram', 'Rajshahi', 'Khulna', 'Sylhet', 'Rangpur', 'Barishal', 'Mymensingh']
   },
 
+  normalizeGeoText(str) {
+    return String(str || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/&/g, ' and ')
+      .replace(/\s+/g, ' ')
+      .toLowerCase()
+      .trim();
+  },
+
+  normalizeStateAlias(country, stateName) {
+    const clean = String(stateName || '').trim();
+    if (!clean) return '';
+    const norm = this.normalizeGeoText(clean);
+    if ((country || '').toLowerCase() === 'india') {
+      if (norm === 'jammu and kashmir') return 'Jammu and Kashmir';
+      if (norm === 'andaman and nicobar' || norm === 'andaman and nicobar islands') return 'Andaman and Nicobar Islands';
+    }
+    const divisions = this.getStatesForCountry(country);
+    const matched = divisions.find(d => this.normalizeGeoText(d.name) === norm);
+    return matched ? matched.name : clean;
+  },
+
+  getDivisionLabel(country = 'India') {
+    const wikiEntry = (typeof window !== 'undefined' && window.getWikipediaDivisionsEntry)
+      ? window.getWikipediaDivisionsEntry(country)
+      : null;
+    return (wikiEntry && wikiEntry.label) ? wikiEntry.label : 'States';
+  },
+
+  resolveCountryKey(country = 'India') {
+    const clean = String(country || 'India').trim();
+    const lower = clean.toLowerCase();
+    if (typeof window !== 'undefined' && window.WIKIPEDIA_COUNTRY_ALIASES && window.WIKIPEDIA_COUNTRY_ALIASES[lower]) {
+      return window.WIKIPEDIA_COUNTRY_ALIASES[lower];
+    }
+    return clean;
+  },
+
   getCountryApiName(country) {
+    const canonical = this.resolveCountryKey(country);
     const map = {
       'UK': 'United Kingdom',
       'USA': 'United States',
@@ -3922,17 +3969,30 @@ countries: [
       'DR Congo': 'Democratic Republic of the Congo',
       'Czech Republic': 'Czechia'
     };
-    return map[country] || country || 'India';
+    return map[canonical] || map[country] || canonical || 'India';
   },
 
   getCountryCode(country) {
     if (!country) return '';
-    const found = (this.countries || []).find(c => c.name.toLowerCase() === country.toLowerCase());
+    const canonical = this.resolveCountryKey(country);
+    const found = (this.countries || []).find(c =>
+      c.name.toLowerCase() === country.toLowerCase() ||
+      c.name.toLowerCase() === canonical.toLowerCase()
+    );
     return found && found.code ? found.code : '';
   },
 
   getStatesForCountry(country = 'India') {
     const c = (country || 'India').trim();
+    const wikiEntry = (typeof window !== 'undefined' && window.getWikipediaDivisionsEntry)
+      ? window.getWikipediaDivisionsEntry(c)
+      : null;
+    if (wikiEntry && Array.isArray(wikiEntry.divisions) && wikiEntry.divisions.length) {
+      return wikiEntry.divisions.map(st => ({
+        name: st.name,
+        cities: Array.isArray(st.cities) && st.cities.length ? st.cities : [st.name]
+      }));
+    }
     if (c.toLowerCase() === 'india') {
       return (this.indianStates || []).map(st => ({ name: st.name, code: st.code, cities: st.cities || [] }));
     }
@@ -3951,27 +4011,54 @@ countries: [
 
   async fetchStatesForCountry(country = 'India') {
     const curated = this.getStatesForCountry(country);
+    const hasWikiCanonical = Boolean(
+      typeof window !== 'undefined' &&
+      window.getWikipediaDivisionsEntry &&
+      window.getWikipediaDivisionsEntry(country)
+    );
     const apiCountry = this.getCountryApiName(country);
     const seen = new Map();
 
-    // Seed curated clean states first
+    // Seed canonical Wikipedia divisions first
     curated.forEach(st => {
-      seen.set(st.name.toLowerCase(), { name: st.name, cities: st.cities || [st.name], stationcount: 0 });
+      seen.set(this.normalizeGeoText(st.name), {
+        name: st.name,
+        cities: st.cities || [st.name],
+        stationcount: 0
+      });
     });
 
     const mergeApiStates = (rawList) => {
+      const canonicalEntries = Array.from(seen.values());
       (rawList || []).forEach(item => {
         const rawName = (item && item.name ? item.name : '').trim();
         if (!rawName || rawName.length < 2 || rawName.length > 48) return;
-        // Skip noisy comma-separated city+state duplicates if India already has clean states
-        const key = rawName.toLowerCase();
-        if (seen.has(key)) {
-          const existing = seen.get(key);
+        const normRaw = this.normalizeGeoText(rawName);
+        if (normRaw === this.normalizeGeoText(country) || normRaw === this.normalizeGeoText(apiCountry)) return;
+
+        if (hasWikiCanonical) {
+          // Strictly enrich Wikipedia divisions without inflating the state count with noisy city/tag strings
+          const matchedDiv = canonicalEntries.find(div => {
+            const normDiv = this.normalizeGeoText(div.name);
+            if (normRaw === normDiv) return true;
+            return (div.cities || []).some(city => {
+              const normCity = this.normalizeGeoText(city);
+              return normCity && (normRaw === normCity || (normCity.length >= 4 && normRaw.startsWith(normCity + ',')));
+            });
+          });
+          if (matchedDiv) {
+            matchedDiv.stationcount = (matchedDiv.stationcount || 0) + (item.stationcount || 0);
+          }
+          return;
+        }
+
+        // Fallback for small countries/territories without a Wikipedia table entry
+        if (seen.has(normRaw)) {
+          const existing = seen.get(normRaw);
           existing.stationcount = Math.max(existing.stationcount || 0, item.stationcount || 0);
-        } else if (country.toLowerCase() !== 'india' || !rawName.includes(',')) {
-          // Format title case cleanly
+        } else if (!rawName.includes(',')) {
           const prettyName = rawName.replace(/\b\w/g, ch => ch.toUpperCase());
-          seen.set(key, { name: prettyName, rawName, cities: [prettyName], stationcount: item.stationcount || 0 });
+          seen.set(normRaw, { name: prettyName, rawName, cities: [prettyName], stationcount: item.stationcount || 0 });
         }
       });
     };
@@ -4000,18 +4087,34 @@ countries: [
 
   getStationsByState(country = 'India', stateName = 'Maharashtra') {
     if (!stateName) return this.getByCountry(country);
-    const sn = stateName.toLowerCase();
-    const stateObj = this.getStatesForCountry(country).find(st => st.name.toLowerCase() === sn);
+    const canonicalState = this.normalizeStateAlias(country, stateName);
+    const sn = this.normalizeGeoText(canonicalState);
+    const divisions = this.getStatesForCountry(country);
+    const stateObj = divisions.find(st => this.normalizeGeoText(st.name) === sn);
+    const cityNorms = stateObj && stateObj.cities
+      ? stateObj.cities.map(c => this.normalizeGeoText(c)).filter(Boolean)
+      : [];
 
-    let matches = this.stations.filter(s => {
-      if (!s.country || (s.country.toLowerCase() !== country.toLowerCase() && s.country.toLowerCase() !== this.getCountryApiName(country).toLowerCase())) return false;
-      if (s.state && s.state.toLowerCase().includes(sn)) return true;
-      if (s.city && s.city.toLowerCase().includes(sn)) return true;
-      if (stateObj && stateObj.cities && stateObj.cities.some(c => s.city && s.city.toLowerCase().includes(c.toLowerCase()))) return true;
+    const canonicalCountry = this.resolveCountryKey(country);
+    const normCountry = this.normalizeGeoText(country);
+    const normCanonicalCountry = this.normalizeGeoText(canonicalCountry);
+    const normApiCountry = this.normalizeGeoText(this.getCountryApiName(country));
+
+    return this.stations.filter(s => {
+      if (!s.country) return false;
+      const sc = this.normalizeGeoText(s.country);
+      if (sc !== normCountry && sc !== normCanonicalCountry && sc !== normApiCountry) return false;
+
+      const sState = this.normalizeGeoText(s.state);
+      const sCity = this.normalizeGeoText(s.city);
+      const sName = this.normalizeGeoText(s.name);
+
+      if (sState && sState === sn) return true;
+      if (sCity && sCity === sn) return true;
+      if (cityNorms.some(cn => cn && (sCity === cn || sCity.includes(cn) || sName.includes(cn)))) return true;
+      if (sState && sn.length >= 4 && sState.includes(sn)) return true;
       return false;
     });
-
-    return matches;
   },
   getByCategory(catId) {
     return this.stations.filter(s => s.category && s.category.includes(catId));
@@ -4209,3 +4312,96 @@ for (let i = 22; i <= 161; i++) {
   ];
   RadioData.nowPlayingData[i.toString()] = defaultSongs[i % defaultSongs.length];
 }
+
+// Auto-assign Wikipedia-accurate state/division field to every curated station
+if (typeof RadioData !== 'undefined' && Array.isArray(RadioData.stations)) {
+  RadioData.stations.forEach(st => {
+    if (st.state) return;
+    const divisions = RadioData.getStatesForCountry(st.country);
+    if (!divisions || !divisions.length) return;
+    const cityNorm = RadioData.normalizeGeoText(st.city);
+    if (!cityNorm || cityNorm === 'national') return;
+    const match = divisions.find(d => {
+      if (RadioData.normalizeGeoText(d.name) === cityNorm) return true;
+      return (d.cities || []).some(c => {
+        const cn = RadioData.normalizeGeoText(c);
+        return cn && (cn === cityNorm || cityNorm.includes(cn) || cn.includes(cityNorm));
+      });
+    });
+    if (match) {
+      st.state = match.name;
+    }
+  });
+}
+
+// Sort world countries alphabetically A-Z by default
+if (typeof RadioData !== 'undefined' && Array.isArray(RadioData.countries)) {
+  RadioData.countries.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function getCountryFlagHtml(countryOrObj, extraClass = '') {
+  let obj = null;
+  let countryName = '';
+  let explicitCode = '';
+  let fallbackEmoji = '🌍';
+
+  if (countryOrObj && typeof countryOrObj === 'object') {
+    obj = countryOrObj;
+    countryName = obj.name || '';
+    explicitCode = obj.code || '';
+    fallbackEmoji = obj.flag || '🌍';
+  } else {
+    countryName = String(countryOrObj || '').trim();
+    const resolvedName = (typeof RadioData !== 'undefined' && RadioData.resolveCountryKey)
+      ? RadioData.resolveCountryKey(countryName)
+      : countryName;
+    if (typeof RadioData !== 'undefined' && Array.isArray(RadioData.countries)) {
+      obj = RadioData.countries.find(c =>
+        c.name.toLowerCase() === countryName.toLowerCase() ||
+        c.name.toLowerCase() === resolvedName.toLowerCase()
+      );
+    }
+    if (obj) {
+      explicitCode = obj.code || '';
+      fallbackEmoji = obj.flag || '🌍';
+    }
+  }
+
+  const specialFlagCodes = {
+    'england': 'gb-eng',
+    'scotland': 'gb-sct',
+    'wales': 'gb-wls',
+    'northern ireland': 'gb-nir',
+    'canary islands': 'es',
+    'ceuta and melilla': 'es',
+    'catalonia': 'es',
+    'basque country': 'es',
+    'azores': 'pt',
+    'madeira': 'pt',
+    'zanzibar': 'tz',
+    'tibet': 'cn',
+    'kurdistan': 'iq',
+    'somaliland': 'so',
+    'transnistria': 'md',
+    'abkhazia': 'ge',
+    'south ossetia': 'ge',
+    'artsakh': 'am',
+    'northern cyprus': 'cy'
+  };
+
+  const lowerName = countryName.toLowerCase();
+  const resolvedCode = specialFlagCodes[lowerName] || (explicitCode ? explicitCode.toLowerCase() : '');
+  const safeEmoji = String(fallbackEmoji || '🌍').replace(/[<>"'&]/g, '');
+  const cls = ['country-flag-img', extraClass].filter(Boolean).join(' ');
+
+  if (!resolvedCode || !/^[a-z]{2}(-[a-z]{2,3})?$/.test(resolvedCode)) {
+    return `<span class="country-flag-emoji ${extraClass}">${safeEmoji}</span>`;
+  }
+
+  return `<img class="${cls}" src="https://flagcdn.com/w40/${resolvedCode}.png" srcset="https://flagcdn.com/w80/${resolvedCode}.png 2x" alt="${countryName.replace(/[<>"'&]/g, '')} flag" loading="lazy" onerror="this.outerHTML='<span class=\\'country-flag-emoji ${extraClass}\\'>${safeEmoji}</span>'" />`;
+}
+if (typeof window !== 'undefined') {
+  window.getCountryFlagHtml = getCountryFlagHtml;
+}
+
+
