@@ -5640,71 +5640,183 @@ header {
 .skeleton-line.sk-title { width: 64%; }
 .skeleton-line.sk-sub { width: 42%; margin-bottom: 0; }
 
-/* ── FAVOURITES 2 BIG SEGMENTS & PLAYLISTS ────────────────────────────── */
-.favs-segments-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.favs-segment-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
+/* ── FAVOURITES 2 BIG SEGMENTS: UPPER COLLECTIONS, LOWER PLAYLISTS ────── */
+.favs-segments-stack, .favs-segments-row {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.favs-big-button, .favs-segment-card {
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
   cursor: pointer;
   transition: all var(--transition);
   text-align: left;
+  width: 100%;
   position: relative;
   overflow: hidden;
 }
 
-.favs-segment-card:hover {
+.favs-big-button:hover, .favs-segment-card:hover {
   background: var(--bg-card-hover);
   border-color: var(--border-focus);
   transform: translateY(-2px);
   box-shadow: var(--card-shadow-hover);
 }
 
-.favs-segment-card.active {
-  border-color: var(--accent);
+.favs-big-button.active, .favs-segment-card.active {
   background: var(--accent-subtle);
+  border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent), var(--card-shadow);
 }
 
-.favs-seg-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+.favs-btn-icon, .favs-seg-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
+  font-size: 1.35rem;
+  flex-shrink: 0;
 }
 
-.favs-seg-info h3 {
-  font-size: 1.05rem;
+.favs-btn-icon.col-icon, .favs-seg-icon.col-icon {
+  background: rgba(255, 71, 87, 0.15);
+  color: #ff4757;
+}
+
+.favs-btn-icon.pl-icon, .favs-seg-icon.pl-icon {
+  background: rgba(112, 161, 255, 0.15);
+  color: #70a1ff;
+}
+
+.favs-btn-text, .favs-seg-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.favs-btn-title, .favs-seg-info h3 {
+  display: block;
+  font-size: 1.15rem;
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 2px;
+  margin-bottom: 3px;
 }
 
-.favs-seg-info p {
-  font-size: 0.75rem;
+.favs-btn-sub, .favs-seg-info p {
+  display: block;
+  font-size: 0.8rem;
   color: var(--text-secondary);
   line-height: 1.3;
 }
 
-.favs-seg-arrow {
-  position: absolute;
-  top: 16px;
-  right: 16px;
+.favs-btn-chevron, .favs-seg-arrow {
   color: var(--text-muted);
+  font-size: 0.95rem;
+  transition: transform var(--transition);
+  flex-shrink: 0;
+}
+
+.favs-big-button.active .favs-btn-chevron, .favs-segment-card.active .favs-seg-arrow {
+  color: var(--accent);
+  transform: translateX(3px);
+}
+
+/* ── STATE EXPLORER STYLING (SEE ALL LOCAL STATIONS) ─────────────────── */
+.local-states-tab {
+  padding-bottom: 40px;
+}
+.local-states-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.local-states-title-wrap {
+  flex: 1;
+  min-width: 0;
+}
+.state-search-bar {
+  display: flex;
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.state-search-bar input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  width: 100%;
+}
+.state-chips-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 12px;
+  margin-bottom: 18px;
+  scrollbar-width: none;
+}
+.state-chips-scroll::-webkit-scrollbar {
+  display: none;
+}
+.state-chip {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  color: var(--text-secondary);
   font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.state-chip:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+  border-color: var(--border-focus);
+}
+.state-chip.active {
+  background: var(--accent);
+  color: #111;
+  border-color: var(--accent);
+  font-weight: 700;
+  box-shadow: 0 2px 10px rgba(200, 168, 118, 0.4);
+}
+.state-stations-section {
+  margin-top: 8px;
+}
+.state-stations-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  gap: 10px;
+}
+.state-badge-count {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
 }
 
 /* Song Row Item in Playlists */
@@ -5807,6 +5919,13 @@ header {
   gap: 8px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.home-section-sub {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
 }
 
 .home-count-pill {

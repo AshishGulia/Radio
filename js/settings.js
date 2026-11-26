@@ -277,10 +277,17 @@ const Settings = (() => {
               <input type="tel" id="profilePhone" class="form-input" value="${prof.phone || ''}" placeholder="+91 00000 00000" />
             </div>
             <div class="form-group">
-              <label>Country (affects Local Radio row)</label>
-              <select id="countrySelect" class="form-input form-select">
+              <label>Country (270 Countries • affects Local Radio row)</label>
+              <select id="countrySelect" class="form-input form-select" onchange="Settings.onCountryChange(this.value)">
                 ${countryOptions}
               </select>
+            </div>
+            <div class="form-group">
+              <label>Your State / Region (affects Local Stations)</label>
+              <input type="text" id="stateInput" list="stateSuggestionsList" class="form-input" value="${AppState.userState || ''}" placeholder="Enter or pick your state…" />
+              <datalist id="stateSuggestionsList">
+                ${(RadioData.getStatesForCountry ? RadioData.getStatesForCountry(s.country || 'India') : []).map(st => `<option value="${st.name}">`).join('')}
+              </datalist>
             </div>
             <button class="btn-primary" onclick="Settings.saveProfile()">Save Profile</button>
           </div>
@@ -523,21 +530,43 @@ const Settings = (() => {
     }
   }
 
+  async function onCountryChange(country) {
+    const stateInput = document.getElementById('stateInput');
+    const datalist = document.getElementById('stateSuggestionsList');
+    if (!RadioData.fetchStatesForCountry) return;
+    const states = await RadioData.fetchStatesForCountry(country);
+    if (datalist) {
+      datalist.innerHTML = states.map(st => `<option value="${st.name}">`).join('');
+    }
+    if (stateInput && states.length) {
+      stateInput.value = states[0].name;
+    } else if (stateInput) {
+      stateInput.value = '';
+    }
+  }
+
   function saveProfile() {
     const name  = document.getElementById('profileName')?.value.trim()  || '';
     const email = document.getElementById('profileEmail')?.value.trim() || '';
     const phone = document.getElementById('profilePhone')?.value.trim() || '';
     const country = document.getElementById('countrySelect')?.value || 'India';
+    const userState = document.getElementById('stateInput')?.value.trim() || '';
 
     AppState.settings.profile.name  = name;
     AppState.settings.profile.email = email;
     AppState.settings.profile.phone = phone;
     AppState.settings.country = country;
+    if (userState) {
+      AppState.userState = userState;
+    } else {
+      const fallbackStates = RadioData.getStatesForCountry ? RadioData.getStatesForCountry(country) : [];
+      AppState.userState = fallbackStates.length ? fallbackStates[0].name : country;
+    }
 
     saveState();
     showToast('Profile saved!', 'success');
 
-    // Refresh home if country changed
+    // Refresh home if country/state changed
     if (AppState.currentTab === 'home') App.renderHome();
   }
 
@@ -625,7 +654,7 @@ const Settings = (() => {
   }
 
   return {
-    open, close, renderSettings, saveProfile,
+    open, close, renderSettings, saveProfile, onCountryChange,
     toggleTheme, setAdPref, subscribe, cancelPremium,
     triggerAvatarUpload, handleAvatarChange,
     switchWallpaperFolder, setWallpaper, applyWallpaper,

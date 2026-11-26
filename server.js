@@ -29,9 +29,11 @@ app.get('/api/stations', async (req, res) => {
   const offset = parseInt(req.query.offset || '0', 10);
   const name = (req.query.name || '').trim();
   const country = (req.query.country || '').trim();
+  const countrycode = (req.query.countrycode || '').trim();
+  const state = (req.query.state || '').trim();
   const tag = (req.query.tag || '').trim();
 
-  const cacheKey = `stations_${limit}_${offset}_${name.toLowerCase()}_${country.toLowerCase()}_${tag.toLowerCase()}`;
+  const cacheKey = `stations_${limit}_${offset}_${name.toLowerCase()}_${country.toLowerCase()}_${countrycode.toLowerCase()}_${state.toLowerCase()}_${tag.toLowerCase()}`;
   if (stationsCache.has(cacheKey)) {
     return res.json(stationsCache.get(cacheKey));
   }
@@ -46,6 +48,8 @@ app.get('/api/stations', async (req, res) => {
   });
   if (name) params.append('name', name);
   if (country && country.toLowerCase() !== 'all') params.append('country', country);
+  if (countrycode) params.append('countrycode', countrycode.toUpperCase());
+  if (state) params.append('state', state);
   if (tag && tag.toLowerCase() !== 'all') params.append('tag', tag);
 
   for (const mirror of RADIO_BROWSER_MIRRORS) {
@@ -83,6 +87,38 @@ app.get('/api/stations', async (req, res) => {
 
   // Fallback empty response if all mirrors fail
   return res.json({ success: false, offset, limit, stations: [], message: 'Radio-Browser mirrors unreachable' });
+});
+
+// 1b. API: Radio-Browser States List for a Country
+app.get('/api/states', async (req, res) => {
+  const country = (req.query.country || '').trim();
+  const cacheKey = `states_${country.toLowerCase()}`;
+  if (stationsCache.has(cacheKey)) {
+    return res.json(stationsCache.get(cacheKey));
+  }
+
+  for (const mirror of RADIO_BROWSER_MIRRORS) {
+    try {
+      const url = country
+        ? `${mirror}/json/states/${encodeURIComponent(country)}/`
+        : `${mirror}/json/states`;
+      const response = await fetch(url, {
+        headers: { 'User-Agent': 'RadioTym/2.0' },
+        signal: AbortSignal.timeout(6000)
+      });
+      if (response.ok) {
+        const rawStates = await response.json();
+        const result = { success: true, country, states: rawStates || [] };
+        stationsCache.set(cacheKey, result);
+        setTimeout(() => stationsCache.delete(cacheKey), 10 * 60 * 1000);
+        return res.json(result);
+      }
+    } catch (err) {
+      // Try next mirror
+    }
+  }
+
+  return res.json({ success: false, country, states: [] });
 });
 
 // 2. API: Live ICY Stream Metadata Poller (reads StreamTitle from stream every 12s)
