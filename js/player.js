@@ -234,7 +234,12 @@ const Player = (() => {
             <i class="fas fa-chevron-down"></i>
           </button>
           <div class="player-header-title-box">
-            <span class="player-header-title">${station.freq || 'LIVE FM'} • ON AIR</span>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span class="player-header-title">${station.freq || 'LIVE FM'} • ON AIR</span>
+              <button class="fav-btn ${isFav ? 'active' : ''}" onclick="openCollectionModal('${station.id}')" id="playerTopFavBtn" aria-label="Save Channel" style="width:30px;height:30px;font-size:0.75rem;min-height:unset;background:var(--bg-card);border:1px solid var(--border);">
+                <i class="fa${isFav ? 's' : 'r'} fa-heart"></i>
+              </button>
+            </div>
             <span class="player-header-sub">${station.flag || '🌍'} ${station.city}, ${station.country}</span>
           </div>
           <div class="player-header-right-btns">
@@ -266,7 +271,7 @@ const Player = (() => {
               <img class="player-channel-logo-img"
                    src="${getStationFavicon(station)}"
                    alt="${station.name}"
-                   onerror="this.onerror=null;this.src='${RADIO_SVG_FALLBACK}';" />
+                   onerror="handleImageError(this)" />
             </div>
             <span class="player-logo-station-name">${station.name}</span>
             <div class="wave-container ${isPlaying ? 'playing' : ''}" id="waveContainer">
@@ -278,13 +283,13 @@ const Player = (() => {
           </div>
 
           <!-- JUST NICHE: SAME SIZE SONG THUMBNAIL WITH REAL ARTWORK -->
-          <div class="player-song-thumb-card" onclick="Player.connectApp('spotify','${escapeQuotes(station.name)}','${escapeQuotes(songInfo.song)}','${escapeQuotes(songInfo.artist)}')" title="Click to open song in Spotify / YouTube Music">
+          <div class="player-song-thumb-card" onclick="Player.connectCurrentApp('spotify')" title="Click to open song in Spotify / YouTube Music">
             <img class="player-song-album-img"
                  id="playerMainSongThumb"
                  src="${songInfo.thumb}"
                  alt="${songInfo.song}"
                  loading="lazy"
-                 onerror="this.onerror=null;this.src='${RADIO_SVG_FALLBACK}';" />
+                 onerror="handleImageError(this)" />
             <div class="player-song-sync-pill">
               <i class="fab fa-spotify"></i>
               <i class="fab fa-youtube"></i>
@@ -294,18 +299,15 @@ const Player = (() => {
 
         <!-- JUST NICHE: SONG NAME AND SINGER -->
         <div class="player-song-meta-box">
-          <div class="player-song-meta-left">
-            <h2 class="player-main-song-title" id="playerSongName">${songInfo.song}</h2>
+          <div class="player-song-meta-left" style="width:100%;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px;">
+              <h2 class="player-main-song-title" id="playerSongName" style="margin-bottom:0;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${songInfo.song}</h2>
+              <button class="icon-btn song-save-btn" onclick="openPlaylistModal('${station.id}')" title="Save Song to Playlist" aria-label="Save Song to Playlist" style="width:38px;height:38px;border-radius:50%;background:var(--bg-card);color:var(--accent);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;">
+                <i class="fas fa-bookmark"></i>
+              </button>
+            </div>
             <p class="player-main-artist-name" id="playerArtistName"><i class="fas fa-microphone-alt"></i> ${songInfo.artist}</p>
             <span class="player-station-tagline">${station.flag || '🌍'} ${station.name} • ${station.city}</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <button class="icon-btn song-save-btn" onclick="openPlaylistModal('${station.id}')" title="Save Song to Playlist" aria-label="Save Song to Playlist" style="width:40px;height:40px;border-radius:50%;background:var(--bg-card);color:var(--accent);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;">
-              <i class="fas fa-bookmark"></i>
-            </button>
-            <button class="fav-btn ${isFav ? 'active' : ''}" onclick="openCollectionModal('${station.id}')" id="playerFavBtn" aria-label="Save to Collection">
-              <i class="fa${isFav ? 's' : 'r'} fa-heart"></i>
-            </button>
           </div>
         </div>
 
@@ -371,15 +373,15 @@ const Player = (() => {
           </div>
 
           <div class="connect-apps-row">
-            <button class="connect-app-btn spotify" onclick="Player.connectApp('spotify','${escapeQuotes(station.name)}','${escapeQuotes(songInfo.song)}','${escapeQuotes(songInfo.artist)}')">
+            <button class="connect-app-btn spotify" onclick="Player.connectCurrentApp('spotify')">
               <i class="fab fa-spotify"></i>
               <span>Spotify</span>
             </button>
-            <button class="connect-app-btn youtube" onclick="Player.connectApp('youtube','${escapeQuotes(station.name)}','${escapeQuotes(songInfo.song)}','${escapeQuotes(songInfo.artist)}')">
+            <button class="connect-app-btn youtube" onclick="Player.connectCurrentApp('youtube')">
               <i class="fab fa-youtube"></i>
               <span>YT Music</span>
             </button>
-            <button class="connect-app-btn soundcloud" onclick="Player.connectApp('soundcloud','${escapeQuotes(station.name)}','${escapeQuotes(songInfo.song)}','${escapeQuotes(songInfo.artist)}')">
+            <button class="connect-app-btn soundcloud" onclick="Player.connectCurrentApp('soundcloud')">
               <i class="fab fa-soundcloud"></i>
               <span>SoundCloud</span>
             </button>
@@ -395,7 +397,7 @@ const Player = (() => {
             <div class="more-apps-grid">
               ${(RadioData.streamingApps || []).slice(3).map(app => `
                 <button class="more-app-btn" style="--app-brand:${app.brand}"
-                        onclick="Player.connectApp('${app.id}','${escapeQuotes(station.name)}','${escapeQuotes(songInfo.song)}','${escapeQuotes(songInfo.artist)}')">
+                        onclick="Player.connectCurrentApp('${app.id}')">
                   <i class="${app.isBrandFa ? 'fab' : 'fas'} ${app.icon}" style="color:${app.brand}"></i>
                   <span>${app.name}</span>
                 </button>`).join('')}
@@ -461,6 +463,12 @@ const Player = (() => {
     }, 400);
   }
 
+  function connectCurrentApp(appId) {
+    if (!currentStation) return;
+    const songInfo = NowPlaying.getSongInfo(currentStation.id);
+    connectApp(appId, currentStation.name, songInfo.song, songInfo.artist);
+  }
+
   function showMoreApps() {
     const panel = document.getElementById('moreAppsPanel');
     if (!panel) return;
@@ -516,7 +524,7 @@ const Player = (() => {
         <img class="mini-station-logo-img"
              src="${getStationFavicon(currentStation)}"
              alt="${currentStation.name}"
-             onerror="this.onerror=null;this.src='${RADIO_SVG_FALLBACK}';" />
+             onerror="handleImageError(this)" />
         <span class="mini-expand-badge"><i class="fas fa-chevron-up"></i></span>
       </div>
 
@@ -660,6 +668,7 @@ const Player = (() => {
     getIsPlaying,
     renderPlayerScreen,
     connectApp,
+    connectCurrentApp,
     showMoreApps,
     updateMediaSession,
   };

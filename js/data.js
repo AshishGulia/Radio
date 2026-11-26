@@ -2388,19 +2388,35 @@ const RadioData = {
 
 };
 
-// Clean minimalist inline SVG radio icon fallback (Data URI) for broken/http/empty favicons
-const RADIO_SVG_FALLBACK = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48' width='48' height='48'%3E%3Crect width='48' height='48' rx='12' fill='%23181a24'/%3E%3Ccircle cx='24' cy='24' r='16' stroke='%23c8a876' stroke-width='2' stroke-opacity='0.3'/%3E%3Ccircle cx='24' cy='24' r='10' stroke='%23c8a876' stroke-width='2'/%3E%3Ccircle cx='24' cy='24' r='4' fill='%23c8a876'/%3E%3Cline x1='14' y1='34' x2='22' y2='13' stroke='%23f3f2ee' stroke-width='2.2' stroke-linecap='round'/%3E%3Ccircle cx='22' cy='13' r='2.5' fill='%23f3f2ee'/%3E%3C/svg%3E";
+// Clean minimalist inline SVG radio icon fallback (Base64 Data URI) for broken/http/empty favicons
+const RADIO_SVG_FALLBACK = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0OCA0OCIgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4Ij48cmVjdCB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHJ4PSIxMiIgZmlsbD0iIzE4MWEyNCIvPjxjaXJjbGUgY3g9IjI0IiBjeT0iMjQiIHI9IjE2IiBzdHJva2U9IiNjOGE4NzYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLW9wYWNpdHk9IjAuMyIvPjxjaXJjbGUgY3g9IjI0IiBjeT0iMjQiIHI9IjEwIiBzdHJva2U9IiNjOGE4NzYiIHN0cm9rZS13aWR0aD0iMiIvPjxjaXJjbGUgY3g9IjI0IiBjeT0iMjQiIHI9IjQiIGZpbGw9IiNjOGE4NzYiLz48bGluZSB4MT0iMTQiIHkxPSIzNCIgeDI9IjIyIiB5Mj0iMTMiIHN0cm9rZT0iI2YzZjJlZSIgc3Ryb2tlLXdpZHRoPSIyLjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjxjaXJjbGUgY3g9IjIyIiBjeT0iMTMiIHI9IjIuNSIgZmlsbD0iI2YzZjJlZSIvPjwvc3ZnPg==";
+window.RADIO_SVG_FALLBACK = RADIO_SVG_FALLBACK;
+
+function handleImageError(img) {
+  if (img) {
+    img.onerror = null;
+    img.src = RADIO_SVG_FALLBACK;
+  }
+}
+window.handleImageError = handleImageError;
 
 // REQUIREMENT 3: Load station logo from station.favicon. If empty, starts with http://, or triggers onError, replace with clean SVG fallback
 function getStationFavicon(station) {
-  if (!station || !station.favicon || typeof station.favicon !== 'string') {
-    return RADIO_SVG_FALLBACK;
+  if (!station) return RADIO_SVG_FALLBACK;
+  let fav = station.favicon || '';
+  if (typeof fav === 'string' && fav.trim().length > 0) {
+    let cleaned = fav.trim();
+    if (cleaned.startsWith('http://') || cleaned.startsWith('https://')) {
+      return cleaned;
+    }
   }
-  const fav = station.favicon.trim();
-  if (!fav || !fav.startsWith('https://')) {
-    return RADIO_SVG_FALLBACK;
+  if (station.homepage && typeof station.homepage === 'string') {
+    try {
+      const urlObj = new URL(station.homepage);
+      return `https://icons.duckduckgo.com/ip3/${urlObj.hostname}.ico`;
+    } catch(e) {}
   }
-  return fav;
+  return RADIO_SVG_FALLBACK;
 }
 
 // Populate remaining nowPlayingData dynamically for IDs 22 to 161

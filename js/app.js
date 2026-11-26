@@ -186,7 +186,7 @@ function openCollectionModal(stationId) {
           <div class="col-modal-freq-logo" style="background:${station.color}22;border:1px solid ${station.color}55;">
             <img src="${getStationFavicon(station)}" alt="${escapeQuotes(station.name)}"
                  style="width:30px;height:30px;object-fit:contain;border-radius:6px;"
-                 onerror="this.onerror=null;this.src='${RADIO_SVG_FALLBACK}';" />
+                 onerror="handleImageError(this)" />
           </div>
           <div class="col-modal-text">
             <h3 class="col-modal-title">Save to Collection</h3>
@@ -397,6 +397,10 @@ function openPlaylistModal(stationId) {
     addedAt: Date.now()
   };
 
+  AppState._pendingSongs = AppState._pendingSongs || {};
+  const tempKey = 'song_temp_' + Date.now();
+  AppState._pendingSongs[tempKey] = songObj;
+
   const playlists = AppState.playlists || [];
 
   modal.innerHTML = `
@@ -409,7 +413,7 @@ function openPlaylistModal(stationId) {
           <div class="col-modal-freq-logo" style="background:${station.color}22;border:1px solid ${station.color}55;">
             <img src="${songObj.thumb}" alt="${escapeQuotes(songInfo.song)}"
                  style="width:30px;height:30px;object-fit:cover;border-radius:6px;"
-                 onerror="this.onerror=null;this.src='${RADIO_SVG_FALLBACK}';" />
+                 onerror="handleImageError(this)" />
           </div>
           <div class="col-modal-text">
             <h3 class="col-modal-title">Save Song to Playlist</h3>
@@ -430,7 +434,7 @@ function openPlaylistModal(stationId) {
           const hasSong = (pl.songs || []).some(s => s.title.toLowerCase() === songObj.title.toLowerCase() && s.artist.toLowerCase() === songObj.artist.toLowerCase());
           return `
             <div class="col-check-item ${hasSong ? 'selected' : ''}" 
-                 onclick="toggleSongInPlaylist('${pl.id}', ${JSON.stringify(songObj).replace(/"/g, '&quot;')}, this)">
+                 onclick="toggleSongInPlaylist('${pl.id}', '${tempKey}', this)">
               <div class="col-item-left">
                 <span class="col-item-icon" style="background:${pl.color}22;color:${pl.color}">
                   <i class="fas ${pl.icon || 'fa-music'}"></i>
@@ -453,8 +457,8 @@ function openPlaylistModal(stationId) {
         <div class="col-create-input-wrap">
           <i class="fas fa-plus-circle"></i>
           <input type="text" id="newPlaylistInput" placeholder="New playlist name (e.g. Punjabi Party)…" 
-                 onkeydown="if(event.key==='Enter') createNewPlaylistWithSong(${JSON.stringify(songObj).replace(/"/g, '&quot;')})" />
-          <button class="btn-create-col" onclick="createNewPlaylistWithSong(${JSON.stringify(songObj).replace(/"/g, '&quot;')})">Create</button>
+                 onkeydown="if(event.key==='Enter') createNewPlaylistWithSong('${tempKey}')" />
+          <button class="btn-create-col" onclick="createNewPlaylistWithSong('${tempKey}')">Create</button>
         </div>
       </div>
 
@@ -470,7 +474,10 @@ function openPlaylistModal(stationId) {
   requestAnimationFrame(() => modal.classList.add('show'));
 }
 
-function toggleSongInPlaylist(playlistId, songObj, itemEl) {
+function toggleSongInPlaylist(playlistId, tempKey, itemEl) {
+  const songObj = AppState._pendingSongs ? AppState._pendingSongs[tempKey] : null;
+  if (!songObj) return;
+
   const pl = AppState.playlists.find(p => p.id === playlistId);
   if (!pl) return;
   if (!pl.songs) pl.songs = [];
@@ -501,7 +508,8 @@ function toggleSongInPlaylist(playlistId, songObj, itemEl) {
   }
 }
 
-function createNewPlaylistWithSong(songObj) {
+function createNewPlaylistWithSong(tempKey) {
+  const songObj = AppState._pendingSongs ? AppState._pendingSongs[tempKey] : null;
   const input = document.getElementById('newPlaylistInput');
   if (!input) return;
   const name = input.value.trim();
@@ -636,10 +644,34 @@ function buildHomeThumbnailCard(station) {
   return `
     <div class="home-thumb-card" onclick="App.openStation('${escapeQuotes(sid)}')">
       <div class="home-thumb-logo-box" style="background:${station.color}22;border:1px solid ${station.color}44;">
-        <img class="home-thumb-img" src="${escapeHtml(faviconUrl)}" alt="${escapeHtml(station.name)}" loading="lazy" onerror="this.onerror=null;this.src='${RADIO_SVG_FALLBACK}';" />
+        <img class="home-thumb-img" src="${escapeHtml(faviconUrl)}" alt="${escapeHtml(station.name)}" loading="lazy" onerror="handleImageError(this)" />
         <span class="home-thumb-flag">${station.flag || '🌍'}</span>
       </div>
       ${nonEnglish ? `<span class="home-thumb-non-eng-name">${escapeHtml(station.name)}</span>` : ''}
+    </div>
+  `;
+}
+
+const CATEGORY_FEATURED = [
+  { id: 'bollywood', name: 'Bollywood', img: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=400&auto=format&fit=crop&q=80', color: '#ff4757' },
+  { id: 'pop', name: 'Pop Hits', img: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400&auto=format&fit=crop&q=80', color: '#ffa502' },
+  { id: 'rock', name: 'Rock & Metal', img: 'https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?w=400&auto=format&fit=crop&q=80', color: '#2ed573' },
+  { id: 'classical', name: 'Classical', img: 'https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=400&auto=format&fit=crop&q=80', color: '#1e90ff' },
+  { id: 'jazz', name: 'Jazz & Blues', img: 'https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=400&auto=format&fit=crop&q=80', color: '#9b59b6' },
+  { id: 'electronic', name: 'Dance / EDM', img: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=400&auto=format&fit=crop&q=80', color: '#00d2d3' },
+  { id: 'lofi', name: 'Lo-Fi Chill', img: 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=400&auto=format&fit=crop&q=80', color: '#70a1ff' },
+  { id: 'hiphop', name: 'Hip Hop', img: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=400&auto=format&fit=crop&q=80', color: '#ff6b35' },
+  { id: 'ambient', name: 'Ambient', img: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400&auto=format&fit=crop&q=80', color: '#26de81' }
+];
+
+function buildHomeGenreThumbnailCard(cat) {
+  return `
+    <div class="home-genre-thumb-card" onclick="App.openCategory('${cat.id}')">
+      <div class="home-genre-img-wrap" style="border:1.5px solid ${cat.color}66;">
+        <img class="home-genre-img" src="${cat.img}" alt="${escapeHtml(cat.name)}" loading="lazy" />
+        <div class="home-genre-overlay"></div>
+        <span class="home-genre-name">${escapeHtml(cat.name)}</span>
+      </div>
     </div>
   `;
 }
@@ -660,7 +692,7 @@ function buildStationCard(station, opts = {}) {
              src="${escapeHtml(faviconUrl)}"
              alt="${escapeHtml(station.name)}"
              loading="lazy"
-             onerror="this.onerror=null;this.src='${RADIO_SVG_FALLBACK}';" />
+             onerror="handleImageError(this)" />
         <span class="row-flag-badge">${station.flag || '🌍'}</span>
       </div>
 
@@ -839,7 +871,7 @@ const App = {
         <div class="home-section-block">
           <div class="home-section-header">
             <h3><i class="fas fa-map-marker-alt" style="color:var(--accent);"></i> Local Stations</h3>
-            <span class="home-count-pill">${localStations.length} channels</span>
+            <button class="see-all-btn" onclick="App.selectLiveCountry('India')">See All <i class="fas fa-chevron-right"></i></button>
           </div>
           <div class="home-horizontal-slider">
             ${localStations.map(s => buildHomeThumbnailCard(s)).join('')}
@@ -850,21 +882,21 @@ const App = {
         <div class="home-section-block">
           <div class="home-section-header">
             <h3><i class="fas fa-globe" style="color:var(--accent);"></i> Global Stations</h3>
-            <span class="home-count-pill">${globalStations.length} channels</span>
+            <button class="see-all-btn" onclick="App.renderTab('browse')">See All <i class="fas fa-chevron-right"></i></button>
           </div>
           <div class="home-horizontal-slider">
             ${globalStations.map(s => buildHomeThumbnailCard(s)).join('')}
           </div>
         </div>
 
-        <!-- ROW 3: GENRE STATIONS -->
+        <!-- ROW 3: GENRE STATIONS WITH REAL CATEGORY IMAGES -->
         <div class="home-section-block">
           <div class="home-section-header">
             <h3><i class="fas fa-music" style="color:var(--accent);"></i> Music & Genres</h3>
-            <span class="home-count-pill">${genreStations.length} channels</span>
+            <button class="see-all-btn" onclick="App.renderTab('browse')">See All <i class="fas fa-chevron-right"></i></button>
           </div>
           <div class="home-horizontal-slider">
-            ${genreStations.map(s => buildHomeThumbnailCard(s)).join('')}
+            ${CATEGORY_FEATURED.map(cat => buildHomeGenreThumbnailCard(cat)).join('')}
           </div>
         </div>
       </div>
@@ -1220,15 +1252,15 @@ const App = {
           ${songs.length ? `
             <div class="songs-list-view">
               ${songs.map(song => `
-                <div class="song-row-item" onclick="Player.connectApp('spotify', '${escapeQuotes(song.stationName)}', '${escapeQuotes(song.title)}', '${escapeQuotes(song.artist)}')">
-                  <img class="song-row-thumb" src="${song.thumb}" alt="${escapeQuotes(song.title)}" onerror="this.onerror=null;this.src='${RADIO_SVG_FALLBACK}';" />
+                <div class="song-row-item" onclick="App.connectSavedSong('spotify', '${pl.id}', '${song.id}')">
+                  <img class="song-row-thumb" src="${song.thumb}" alt="${escapeQuotes(song.title)}" onerror="handleImageError(this)" />
                   <div class="song-row-meta">
                     <h4 class="song-row-title">${escapeHtml(song.title)}</h4>
                     <p class="song-row-artist"><i class="fas fa-microphone-alt"></i> ${escapeHtml(song.artist)}</p>
                     <span class="song-row-source"><i class="fas fa-broadcast-tower"></i> ${escapeHtml(song.stationName || 'Radio Station')}</span>
                   </div>
                   <div class="song-row-actions" onclick="event.stopPropagation()">
-                    <button class="icon-btn song-action-btn" onclick="Player.connectApp('spotify', '${escapeQuotes(song.stationName)}', '${escapeQuotes(song.title)}', '${escapeQuotes(song.artist)}')" title="Play on Spotify">
+                    <button class="icon-btn song-action-btn" onclick="App.connectSavedSong('spotify', '${pl.id}', '${song.id}')" title="Play on Spotify">
                       <i class="fab fa-spotify" style="color:#1DB954"></i>
                     </button>
                     <button class="icon-btn song-action-btn" onclick="removeSongFromPlaylist('${pl.id}', '${song.id}')" title="Remove from playlist">
@@ -1824,6 +1856,14 @@ const App = {
       AppState.stationIndex = AppState.stationList.length - 1;
     }
     Player.play(station);
+  },
+
+  connectSavedSong(appId, playlistId, songId) {
+    const pl = (AppState.playlists || []).find(p => p.id === playlistId);
+    if (!pl || !pl.songs) return;
+    const song = pl.songs.find(s => s.id === songId);
+    if (!song) return;
+    Player.connectApp(appId, song.stationName || 'Radio', song.title, song.artist);
   },
 };
 

@@ -5887,4 +5887,78 @@ header {
   max-width: 90px;
 }
 
+/* ── HOME GENRE THUMBNAIL CARDS (CATEGORY PICTURES) ───────────────────── */
+.home-genre-thumb-card {
+  flex-shrink: 0;
+  width: 110px;
+  cursor: pointer;
+  transition: transform var(--transition);
+}
+
+.home-genre-thumb-card:hover {
+  transform: translateY(-3px);
+}
+
+.home-genre-img-wrap {
+  width: 110px;
+  height: 80px;
+  border-radius: 14px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--card-shadow);
+  display: flex;
+  align-items: flex-end;
+  padding: 8px;
+}
+
+.home-genre-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.home-genre-thumb-card:hover .home-genre-img {
+  transform: scale(1.08);
+}
+
+.home-genre-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 70%, transparent 100%);
+}
+
+.home-genre-name {
+  position: relative;
+  z-index: 2;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+.see-all-btn {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: opacity var(--transition);
+}
+
+.see-all-btn:hover {
+  opacity: 0.8;
+}
+
+
 
