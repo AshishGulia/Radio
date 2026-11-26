@@ -274,7 +274,7 @@ const NowPlaying = (() => {
     const current = (typeof AppState !== 'undefined') ? AppState.currentStation : null;
     if (!current || String(current.id) !== String(stationId)) return;
 
-    // 1. Update Song Title & Artist in player screen
+    // Update Song Title & Artist in player screen
     const songTitleEl = document.getElementById('playerSongName');
     if (songTitleEl) songTitleEl.textContent = info.song;
 
@@ -283,7 +283,7 @@ const NowPlaying = (() => {
       artistEl.innerHTML = `<i class="fas fa-microphone-alt"></i> ${info.artist}`;
     }
 
-    // 2. Update Status Indicator Badges (Full Player)
+    // Update Status Indicator Badges (Full Player)
     const statusContainer = document.getElementById('playerStatusRow');
     if (statusContainer) {
       statusContainer.innerHTML = `
@@ -295,13 +295,13 @@ const NowPlaying = (() => {
       `;
     }
 
-    // 3. Update Mini Player Status & Info
+    // Update Mini Player Status & Info
     const miniSongEl = document.querySelector('.mini-info .mini-song');
     if (miniSongEl) {
       miniSongEl.innerHTML = `<span class="status-indicator-badge-mini ${info.badgeClass}"><span class="indicator-dot"></span></span> ${info.song} • <em>${info.artist}</em>`;
     }
 
-    // 4. Update MediaSession Lockscreen metadata
+    // Update MediaSession Lockscreen metadata
     if ('mediaSession' in navigator) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: info.song,
@@ -323,7 +323,7 @@ const NowPlaying = (() => {
   }
 
   /**
-   * Get cached or fallback song info for station
+   * Get cached or tag-inferred info for station (for unpolled list cards vs polled active stations)
    */
   function getSongInfo(stationId) {
     if (stationCache[stationId]) {
@@ -331,20 +331,29 @@ const NowPlaying = (() => {
     }
 
     const station = (typeof RadioData !== 'undefined' && RadioData.getById) ? RadioData.getById(stationId) : null;
-    const defaultAdThumb = "https://images.unsplash.com/photo-1557804506-669a67965ba0?w=400&auto=format&fit=crop&q=80";
+    const tagsLower = (station && station.tags ? station.tags : (station && Array.isArray(station.category) ? station.category.join(',') : '')).toLowerCase();
+    const isTalkTag = TALK_TAGS.some(tag => tagsLower.includes(tag));
 
-    // Fallback info while initial ICY poll completes
-    const evaluated = evaluateStreamTitle('', station);
-    const result = {
-      song: evaluated.song,
-      artist: evaluated.artist,
-      status: evaluated.status,
-      isMusic: evaluated.isMusic,
-      badgeText: evaluated.badgeText,
-      badgeClass: evaluated.badgeClass,
-      thumb: evaluated.isMusic
-        ? "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400&auto=format&fit=crop&q=80"
-        : defaultAdThumb,
+    const defaultAdThumb = "https://images.unsplash.com/photo-1557804506-669a67965ba0?w=400&auto=format&fit=crop&q=80";
+    const defaultMusicThumb = "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400&auto=format&fit=crop&q=80";
+
+    const result = isTalkTag ? {
+      song: 'Live News & Talk Segment',
+      artist: (station && station.name) || 'Radio Broadcast',
+      status: 'ad',
+      isMusic: false,
+      badgeText: 'AD / TALK / NEWS',
+      badgeClass: 'status-red',
+      thumb: defaultAdThumb,
+      lastChecked: 0
+    } : {
+      song: (station && station.name) ? `${station.name} Live` : 'Live Radio Stream',
+      artist: (station && station.country) || 'Tuning ICY Metadata…',
+      status: 'music',
+      isMusic: true,
+      badgeText: 'LIVE MUSIC',
+      badgeClass: 'status-green',
+      thumb: defaultMusicThumb,
       lastChecked: 0
     };
 

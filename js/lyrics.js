@@ -56,12 +56,13 @@ const LyricsEngine = (() => {
     if (lyricsCache.has(cacheKey)) {
       currentLyrics = lyricsCache.get(cacheKey);
       isLoading = false;
-      if (isOpen) render();
+      syncAllViews();
       return;
     }
 
     isLoading = true;
     if (isOpen) renderLoadingState();
+    syncInlinePanel();
 
     try {
       // 1. Direct LRCLIB GET: https://lrclib.net/api/get?artist_name={artist}&track_name={track}
@@ -74,7 +75,7 @@ const LyricsEngine = (() => {
           lyricsCache.set(cacheKey, processed);
           currentLyrics = processed;
           isLoading = false;
-          if (isOpen) render();
+          syncAllViews();
           return;
         }
       }
@@ -93,7 +94,7 @@ const LyricsEngine = (() => {
             lyricsCache.set(cacheKey, processed);
             currentLyrics = processed;
             isLoading = false;
-            if (isOpen) render();
+            syncAllViews();
             return;
           }
         }
@@ -117,7 +118,7 @@ const LyricsEngine = (() => {
           lyricsCache.set(cacheKey, processed);
           currentLyrics = processed;
           isLoading = false;
-          if (isOpen) render();
+          syncAllViews();
           return;
         }
       }
@@ -126,7 +127,17 @@ const LyricsEngine = (() => {
     // No lyrics found for track
     isLoading = false;
     currentLyrics = null;
-    if (isOpen) render();
+    syncAllViews();
+  }
+
+  function escapeLyricHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   function processLyricsResponse(data, originalTrack, originalArtist) {
@@ -146,6 +157,58 @@ const LyricsEngine = (() => {
     };
   }
 
+  function syncAllViews() {
+    if (isOpen) render();
+    syncInlinePanel();
+  }
+
+  function getInlineHtml(station) {
+    const st = station || (typeof AppState !== 'undefined' && AppState.currentStation) || null;
+    const songInfo = (typeof NowPlaying !== 'undefined' && st) ? NowPlaying.getSongInfo(st.id) : null;
+
+    if (isAdOrTalk || (songInfo && !songInfo.isMusic)) {
+      return `
+        <div class="inline-lyrics-status red">
+          <i class="fas fa-bullhorn"></i>
+          <span>No lyrics available during broadcast break / talk segment.</span>
+        </div>`;
+    }
+    if (isLoading) {
+      return `
+        <div class="inline-lyrics-status">
+          <i class="fas fa-circle-notch fa-spin"></i>
+          <span>Fetching live lyrics from LRCLIB…</span>
+        </div>`;
+    }
+    if (currentLyrics && currentLyrics.lines && currentLyrics.lines.length > 0) {
+      return currentLyrics.lines.map(l => `<p class="inline-lyric-line">${escapeLyricHtml(l.orig)}</p>`).join('');
+    }
+    return `
+      <div class="inline-lyrics-status">
+        <i class="fas fa-music"></i>
+        <span>No lyrics available during broadcast break / talk segment.</span>
+      </div>`;
+  }
+
+  function syncInlinePanel() {
+    const bodyEl = document.getElementById('playerInlineLyricsContent');
+    if (bodyEl) {
+      bodyEl.innerHTML = getInlineHtml();
+    }
+    const subEl = document.getElementById('playerInlineLyricsSubtitle');
+    if (subEl) {
+      if (isAdOrTalk) {
+        subEl.textContent = 'Broadcast break / talk segment';
+      } else if (isLoading) {
+        subEl.textContent = 'Searching LRCLIB…';
+      } else if (currentLyrics) {
+        subEl.textContent = `${currentLyrics.title} — ${currentLyrics.artist}`;
+      } else {
+        subEl.textContent = 'Auto-synced via LRCLIB';
+      }
+    }
+  }
+
   /**
    * REQUIREMENT 5: When the station switches to Red (Ad/News/Talk)
    */
@@ -153,7 +216,7 @@ const LyricsEngine = (() => {
     isAdOrTalk = true;
     currentLyrics = null;
     isLoading = false;
-    if (isOpen) render();
+    syncAllViews();
   }
 
   function getLanguage(code) {
@@ -273,7 +336,7 @@ const LyricsEngine = (() => {
     } else if (currentLyrics && currentLyrics.lines && currentLyrics.lines.length > 0) {
       contentHtml = currentLyrics.lines.map((line, idx) => `
         <div class="lyrics-line-group ${idx === 0 ? 'active-pulse' : ''}">
-          <div class="lyrics-orig-text">${line.orig}</div>
+          <div class="lyrics-orig-text">${escapeLyricHtml(line.orig)}</div>
         </div>
       `).join('');
     } else {
@@ -281,7 +344,7 @@ const LyricsEngine = (() => {
         <div class="lyrics-empty-notice">
           <i class="fas fa-music" style="color:var(--text-muted);font-size:2rem;margin-bottom:12px;display:inline-block;"></i>
           <p style="color:var(--text-secondary);font-size:0.9rem;">
-            No synchronized lyrics found for this live song (${currentTitle}). Enjoy the music!
+            No lyrics available during broadcast break / talk segment.
           </p>
         </div>
       `;
@@ -297,8 +360,8 @@ const LyricsEngine = (() => {
 
           <div class="lyrics-track-header">
             <span class="lyrics-now-singing"><i class="fas fa-microphone-alt"></i> LIVE SONG LYRICS</span>
-            <h2 class="lyrics-song-title">${currentTitle}</h2>
-            <span class="lyrics-artist-name">${currentSingers}</span>
+            <h2 class="lyrics-song-title">${escapeLyricHtml(currentTitle)}</h2>
+            <span class="lyrics-artist-name">${escapeLyricHtml(currentSingers)}</span>
           </div>
 
           <div class="lyrics-top-actions">
@@ -325,6 +388,8 @@ const LyricsEngine = (() => {
   return {
     autoFetch,
     onAdOrTalkSegment,
+    getInlineHtml,
+    syncInlinePanel,
     open,
     close,
     render,

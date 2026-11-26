@@ -142,6 +142,7 @@ const Player = (() => {
     updateMediaSession(station);
     if (typeof CarMode !== 'undefined' && CarMode.isOpen()) CarMode.render();
     if (typeof LyricsEngine !== 'undefined' && LyricsEngine.isOpen()) LyricsEngine.render();
+  }
 
   function pause() {
     if (audio) audio.pause();
@@ -156,7 +157,8 @@ const Player = (() => {
 
   function resume() {
     if (!audio || !currentStation) return;
-    if (!audio.src) audio.src = currentStation.stream;
+    const streamUrl = currentStation.url_resolved || currentStation.stream || currentStation.url;
+    if (!audio.src && streamUrl) audio.src = streamUrl;
     audio.play().catch(() => {});
     isPlaying = true;
     AppState.isPlaying = true;
@@ -335,16 +337,21 @@ const Player = (() => {
           <span class="volume-pct" id="volumePct">${Math.round(volume*100)}%</span>
         </div>
 
-        <!-- DEDICATED LYRICS SHORTCUT (REQUIREMENT 5) -->
-        <div class="player-lyrics-shortcut" onclick="LyricsEngine.open()">
-          <div class="lyrics-shortcut-left">
-            <i class="fas fa-quote-left lyrics-shortcut-icon"></i>
-            <div class="lyrics-shortcut-meta">
-              <strong>Auto-Fetched Song Lyrics</strong>
-              <small>LRCLIB Live Synchronized Lyrics • Instant View</small>
+        <!-- DEDICATED INLINE SCROLLABLE LYRICS PANEL/DRAWER IN PLAYER UI (REQUIREMENT 5) -->
+        <div class="player-lyrics-drawer" id="playerLyricsDrawer">
+          <div class="player-lyrics-drawer-header" onclick="LyricsEngine.open()">
+            <div class="lyrics-shortcut-left">
+              <i class="fas fa-quote-left lyrics-shortcut-icon"></i>
+              <div class="lyrics-shortcut-meta">
+                <strong>Live Lyrics</strong>
+                <small id="playerInlineLyricsSubtitle">Auto-synced via LRCLIB</small>
+              </div>
             </div>
+            <span class="lyrics-shortcut-pill"><i class="fas fa-expand-alt"></i> Full View</span>
           </div>
-          <span class="lyrics-shortcut-pill"><i class="fas fa-align-left"></i> View Lyrics</span>
+          <div class="player-inline-lyrics-body" id="playerInlineLyricsContent">
+            ${(typeof LyricsEngine !== 'undefined' && LyricsEngine.getInlineHtml) ? LyricsEngine.getInlineHtml(station) : '<p class="inline-lyrics-hint">Waiting for live song metadata…</p>'}
+          </div>
         </div>
 
 

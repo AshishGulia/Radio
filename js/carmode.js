@@ -145,7 +145,7 @@ const CarMode = (() => {
         <!-- MASSIVE DRIVER TOUCH CONTROLS -->
         <div class="car-controls-row">
           <button class="car-ctrl-btn car-fav-btn ${isFav ? 'active' : ''}" id="carFavBtn"
-                  onclick="CarMode.toggleFav(${station.id})" aria-label="Save Favorite">
+                  onclick="CarMode.toggleFav('${station.id}')" aria-label="Save Favorite">
             <i class="fa${isFav ? 's' : 'r'} fa-heart"></i>
           </button>
           <button class="car-ctrl-btn car-prev-btn" onclick="Player.prev(); CarMode.render();" aria-label="Previous Station">
@@ -164,9 +164,9 @@ const CarMode = (() => {
           <div class="car-presets-label"><i class="fas fa-sliders-h"></i> DRIVER PRESET CHANNELS</div>
           <div class="car-presets-scroll">
             ${presetStations.map((p, idx) => {
-              const isCurr = p.id === station.id;
+              const isCurr = String(p.id) === String(station.id);
               return `
-                <button class="car-preset-card ${isCurr ? 'active' : ''}" onclick="Player.play(RadioData.getById(${p.id})); CarMode.render();">
+                <button class="car-preset-card ${isCurr ? 'active' : ''}" onclick="Player.play(RadioData.getById('${p.id}')); CarMode.render();">
                   <span class="car-preset-num">P${idx + 1}</span>
                   <div class="car-preset-freq" style="color:${p.color}">${(p.freq || 'FM').replace(' FM','')}</div>
                   <div class="car-preset-name">${p.name}</div>

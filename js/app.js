@@ -31,13 +31,24 @@ const AppState = {
 };
 
 // ─── PERSISTENCE (localStorage) ──────────────────────────────────────────────
+function escapeQuotes(str) {
+  if (!str) return '';
+  return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
 function saveState() {
   try {
+    const savedStations = {};
+    (AppState.favourites || []).forEach(id => {
+      const st = (typeof RadioData !== 'undefined' && RadioData.getById) ? RadioData.getById(id) : null;
+      if (st) savedStations[String(id)] = st;
+    });
     localStorage.setItem('radiowave_state', JSON.stringify({
       favourites: AppState.favourites,
       collections: AppState.collections,
       theme: AppState.theme,
       settings: AppState.settings,
+      savedStations
     }));
   } catch(e) {}
 }
@@ -49,16 +60,19 @@ function loadState() {
     const saved = JSON.parse(raw);
     if (saved.theme)       AppState.theme = saved.theme;
     if (saved.settings)    AppState.settings = { ...AppState.settings, ...saved.settings };
+    if (saved.savedStations && typeof RadioData !== 'undefined' && RadioData.liveStationsMap) {
+      Object.assign(RadioData.liveStationsMap, saved.savedStations);
+    }
     if (saved.collections && Array.isArray(saved.collections) && saved.collections.length) {
       AppState.collections = saved.collections;
     } else {
       AppState.collections = JSON.parse(JSON.stringify(DEFAULT_COLLECTIONS));
     }
     if (saved.favourites && Array.isArray(saved.favourites)) {
-      AppState.favourites = saved.favourites;
+      AppState.favourites = saved.favourites.map(String);
       // If 'all' collection is empty, backfill with saved favourites
       if (AppState.collections[0] && (!AppState.collections[0].stationIds || !AppState.collections[0].stationIds.length)) {
-        AppState.collections[0].stationIds = [...saved.favourites];
+        AppState.collections[0].stationIds = [...AppState.favourites];
       }
     }
     syncFavouritesFromCollections();
@@ -69,31 +83,34 @@ function loadState() {
 function syncFavouritesFromCollections() {
   const set = new Set();
   (AppState.collections || []).forEach(col => {
-    (col.stationIds || []).forEach(id => set.add(Number(id)));
+    (col.stationIds || []).forEach(id => {
+      if (id !== null && id !== undefined && id !== '') set.add(String(id));
+    });
   });
   AppState.favourites = Array.from(set);
   saveState();
 }
 
 function updateFavouriteButtonsUI(stationId) {
-  const isFav = AppState.favourites.includes(stationId);
+  const sid = String(stationId);
+  const isFav = (AppState.favourites || []).map(String).includes(sid);
 
   // Update player fav button if open
   const playerBtn = document.getElementById('playerFavBtn');
-  if (playerBtn) {
+  if (playerBtn && AppState.currentStation && String(AppState.currentStation.id) === sid) {
     playerBtn.className = `fav-btn ${isFav ? 'active' : ''}`;
     playerBtn.innerHTML = `<i class="fa${isFav ? 's' : 'r'} fa-heart"></i>`;
   }
 
   // Update minimal station row buttons across views
-  document.querySelectorAll(`[data-station-id="${stationId}"] .row-fav-btn`).forEach(btn => {
+  document.querySelectorAll(`[data-station-id="${sid}"] .row-fav-btn`).forEach(btn => {
     btn.className = `row-fav-btn ${isFav ? 'active' : ''}`;
     btn.innerHTML = `<i class="fa${isFav ? 's' : 'r'} fa-heart"></i>`;
   });
 
   // Update mini player fav button if present
   const miniFavBtn = document.getElementById('miniFavBtn');
-  if (miniFavBtn && AppState.currentStation && AppState.currentStation.id === stationId) {
+  if (miniFavBtn && AppState.currentStation && String(AppState.currentStation.id) === sid) {
     miniFavBtn.className = `icon-btn mini-ctrl-btn mini-fav-btn ${isFav ? 'active' : ''}`;
     miniFavBtn.innerHTML = `<i class="fa${isFav ? 's' : 'r'} fa-heart"></i>`;
     miniFavBtn.title = isFav ? 'Saved in Favourites' : 'Add to Favourites';
@@ -144,6 +161,7 @@ function openCollectionModal(stationId) {
   if (!modal) return;
 
   const collections = AppState.collections || [];
+  const sid = String(station.id);
 
   modal.innerHTML = `
     <div class="col-modal-backdrop" onclick="closeCollectionModal()"></div>
@@ -152,9 +170,10 @@ function openCollectionModal(stationId) {
       
       <div class="col-modal-header">
         <div class="col-modal-station-info">
-          <div class="col-modal-freq-logo" style="background:${station.color}">
-            <span class="freq-num">${(station.freq || 'FM').replace(' FM','').replace(' AM','')}</span>
-            <span class="freq-band">${station.freq && station.freq.includes('AM') ? 'AM' : 'FM'}</span>
+          <div class="col-modal-freq-logo" style="background:${station.color}22;border:1px solid ${station.color}55;">
+            <img src="${getStationFavicon(station)}" alt="${escapeQuotes(station.name)}"
+                 style="width:30px;height:30px;object-fit:contain;border-radius:6px;"
+                 onerror="this.onerror=null;this.src='${RADIO_SVG_FALLBACK}';" />
           </div>
           <div class="col-modal-text">
             <h3 class="col-modal-title">Save to Collection</h3>
@@ -172,10 +191,10 @@ function openCollectionModal(stationId) {
 
       <div class="col-list" id="collectionOptionsList">
         ${collections.map(col => {
-          const hasStation = (col.stationIds || []).includes(station.id);
+          const hasStation = (col.stationIds || []).map(String).includes(sid);
           return `
             <div class="col-check-item ${hasStation ? 'selected' : ''}" 
-                 onclick="toggleStationInCollection('${col.id}', ${station.id}, this)">
+                 onclick="toggleStationInCollection('${col.id}', '${escapeQuotes(sid)}', this)">
               <div class="col-item-left">
                 <span class="col-item-icon" style="background:${col.color}22;color:${col.color}">
                   <i class="fas ${col.icon || 'fa-folder'}"></i>
@@ -198,8 +217,8 @@ function openCollectionModal(stationId) {
         <div class="col-create-input-wrap">
           <i class="fas fa-folder-plus"></i>
           <input type="text" id="newCollectionInput" placeholder="New collection name (e.g. Morning Beats)…" 
-                 onkeydown="if(event.key==='Enter') createNewCollection(${station.id})" />
-          <button class="btn-create-col" onclick="createNewCollection(${station.id})">Create</button>
+                 onkeydown="if(event.key==='Enter') createNewCollection('${escapeQuotes(sid)}')" />
+          <button class="btn-create-col" onclick="createNewCollection('${escapeQuotes(sid)}')">Create</button>
         </div>
       </div>
 
@@ -229,12 +248,13 @@ function toggleStationInCollection(collectionId, stationId, itemEl) {
   if (!col) return;
   if (!col.stationIds) col.stationIds = [];
 
-  const idx = col.stationIds.indexOf(stationId);
+  const sid = String(stationId);
+  const idx = col.stationIds.findIndex(id => String(id) === sid);
   const checkIcon = itemEl ? itemEl.querySelector('.col-item-checkbox i') : null;
   const countEl = itemEl ? itemEl.querySelector('.col-item-count') : null;
 
   if (idx === -1) {
-    col.stationIds.push(stationId);
+    col.stationIds.push(sid);
     if (itemEl) itemEl.classList.add('selected');
     if (checkIcon) {
       checkIcon.className = 'fas fa-check-circle';
@@ -254,7 +274,7 @@ function toggleStationInCollection(collectionId, stationId, itemEl) {
   }
 
   syncFavouritesFromCollections();
-  updateFavouriteButtonsUI(stationId);
+  updateFavouriteButtonsUI(sid);
 
   // If favourites tab is active, re-render
   if (AppState.currentTab === 'favourites') {
@@ -277,12 +297,13 @@ function createNewCollection(stationId) {
   const randomColor = colors[Math.floor(Math.random() * colors.length)];
   const randomIcon = icons[Math.floor(Math.random() * icons.length)];
 
+  const sid = stationId ? String(stationId) : null;
   const newCol = {
     id,
     name,
     icon: randomIcon,
     color: randomColor,
-    stationIds: stationId ? [stationId] : []
+    stationIds: sid ? [sid] : []
   };
 
   AppState.collections.push(newCol);
@@ -290,9 +311,9 @@ function createNewCollection(stationId) {
   saveState();
   showToast(`Collection "${name}" created!`, 'success');
 
-  if (stationId) {
-    updateFavouriteButtonsUI(stationId);
-    openCollectionModal(stationId);
+  if (sid) {
+    updateFavouriteButtonsUI(sid);
+    openCollectionModal(sid);
   }
 
   if (AppState.currentTab === 'favourites') {
@@ -364,21 +385,31 @@ function shareStation(stationId) {
   }
 }
 
-// ─── STATION ROW ITEM (MINIMAL: logo freq + name + breathing note + fav) ──────
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ─── STATION ROW ITEM (MINIMAL: logo favicon + name + green/red status + fav) ──────
 function buildStationCard(station, opts = {}) {
-  const isFav = AppState.favourites && AppState.favourites.includes(station.id);
+  const sid = String(station.id);
+  const isFav = AppState.favourites && AppState.favourites.map(String).includes(sid);
   const info = NowPlaying.getSongInfo(station.id);
   const faviconUrl = getStationFavicon(station);
   const statusBorderClass = info.isMusic ? 'live-music-border' : 'live-ad-border';
 
   return `
-    <div class="station-row ${statusBorderClass}" onclick="App.openStation('${station.id}')" data-station-id="${station.id}">
+    <div class="station-row ${statusBorderClass}" onclick="App.openStation('${escapeQuotes(sid)}')" data-station-id="${escapeHtml(sid)}">
       <!-- STATION LOGO WITH MINIMALIST SVG FALLBACK (REQUIREMENT 3) -->
       <div class="row-station-logo-box" style="background:${station.color}22;border:1px solid ${station.color}44;">
         <img class="row-station-logo-img"
-             src="${faviconUrl}"
-             alt="${escapeQuotes(station.name)}"
+             src="${escapeHtml(faviconUrl)}"
+             alt="${escapeHtml(station.name)}"
              loading="lazy"
              onerror="this.onerror=null;this.src='${RADIO_SVG_FALLBACK}';" />
         <span class="row-flag-badge">${station.flag || '🌍'}</span>
@@ -387,7 +418,7 @@ function buildStationCard(station, opts = {}) {
       <!-- STATION NAME + SUBTEXT + LIVE SONG/AD STATUS BADGE (REQUIREMENT 4) -->
       <div class="row-name-wrap">
         <div class="row-name-top">
-          <span class="row-station-name">${station.name}</span>
+          <span class="row-station-name">${escapeHtml(station.name)}</span>
           <!-- LIVE STATUS BADGE: GREEN BLINKING LIVE MUSIC OR RED SOLID AD/TALK -->
           <span class="status-indicator-badge-mini ${info.badgeClass}">
             <span class="indicator-dot"></span>
@@ -395,15 +426,15 @@ function buildStationCard(station, opts = {}) {
           </span>
         </div>
         <div class="row-station-sub-line">
-          <span class="row-station-sub">${station.city ? `${station.city}, ` : ''}${station.country || 'Global'}</span>
+          <span class="row-station-sub">${station.city ? `${escapeHtml(station.city)}, ` : ''}${escapeHtml(station.country || 'Global')}</span>
           ${station.bitrate ? `<span class="row-bitrate-pill">${station.bitrate}k</span>` : ''}
-          ${station.codec ? `<span class="row-codec-pill">${station.codec}</span>` : ''}
+          ${station.codec ? `<span class="row-codec-pill">${escapeHtml(station.codec)}</span>` : ''}
         </div>
       </div>
 
       <!-- FAV / COLLECTION SAVE BUTTON -->
       <button class="row-fav-btn ${isFav ? 'active' : ''}"
-              onclick="event.stopPropagation();openCollectionModal('${station.id}')"
+              onclick="event.stopPropagation();openCollectionModal('${escapeQuotes(sid)}')"
               aria-label="Save to Collection">
         <i class="fa${isFav ? 's' : 'r'} fa-heart"></i>
       </button>
@@ -1014,36 +1045,83 @@ const App = {
     showToast(`Loaded ${country} radio stations`, 'info');
   },
 
-  renderBrowseGrid(country) {
+  browseOffset: 0,
+  browseStations: [],
+  browseHasMore: false,
+
+  async renderBrowseGrid(country, isAppend = false) {
     const grid = document.getElementById('browseGrid');
     if (!grid) return;
 
-    let stations = RadioData.getByCountry(country);
-    AppState.stationList = stations;
+    const countryMap = {
+      'UK': 'United Kingdom',
+      'USA': 'United States',
+      'UAE': 'United Arab Emirates'
+    };
+    const apiCountry = countryMap[country] || country;
+    const tagFilter = (AppState.currentFilter && AppState.currentFilter.type !== 'all') ? AppState.currentFilter.type : '';
 
-    if (!stations.length) {
-      grid.innerHTML = `<div class="empty-state"><i class="fas fa-broadcast-tower"></i><p>No stations found for ${country}</p></div>`;
-      return;
+    if (!isAppend) {
+      this.browseOffset = 0;
+      this.browseStations = [];
+      grid.innerHTML = `<div class="stations-list-view">${this.renderSkeletons()}</div>`;
+    } else {
+      const btn = document.getElementById('browseLoadMoreBtn');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> <span>Loading Next 50…</span>';
+      }
     }
 
-    // Apply active filter if any
-    if (AppState.currentFilter.type !== 'all') {
-      stations = stations.filter(s => s.category.includes(AppState.currentFilter.type));
+    const result = await RadioData.fetchLiveStations({
+      country: apiCountry,
+      tag: tagFilter,
+      offset: this.browseOffset,
+      limit: 50
+    });
+
+    const fetched = result.stations || [];
+    if (isAppend) {
+      this.browseStations.push(...fetched);
+    } else {
+      this.browseStations = fetched;
     }
+
+    let stations = [...this.browseStations];
     if (AppState.currentFilter.sort === 'az') {
       stations.sort((a,b) => a.name.localeCompare(b.name));
     } else if (AppState.currentFilter.sort === 'za') {
       stations.sort((a,b) => b.name.localeCompare(a.name));
     }
 
-    // All stations as plain vertical list rows (no grid)
+    AppState.stationList = stations;
+    this.browseHasMore = fetched.length >= 50;
+
+    if (!stations.length) {
+      grid.innerHTML = `<div class="empty-state"><i class="fas fa-broadcast-tower"></i><p>No live HTTPS stations found for ${escapeHtml(country)}</p></div>`;
+      return;
+    }
+
     grid.innerHTML = `
       <div class="browse-country-badge">
-        <span>Stations in <strong>${country}</strong> — ${stations.length} channels</span>
+        <span>Live Stations in <strong>${escapeHtml(country)}</strong> — ${stations.length} channels</span>
       </div>
       <div class="stations-list-view">
         ${stations.map(s => buildStationCard(s)).join('')}
-      </div>`;
+      </div>
+      ${this.browseHasMore ? `
+        <div class="load-more-container" style="padding-bottom:24px;">
+          <button class="load-more-btn" id="browseLoadMoreBtn" onclick="App.loadMoreBrowseStations('${escapeQuotes(country)}')">
+            <i class="fas fa-plus-circle"></i>
+            <span>Load More Stations (+50)</span>
+          </button>
+        </div>
+      ` : ''}`;
+  },
+
+  loadMoreBrowseStations(country) {
+    this.browseOffset += 50;
+    this.renderBrowseGrid(country, true);
   },
 
   toggleOtherCountries(btn) {

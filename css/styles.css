@@ -5567,12 +5567,75 @@ header {
   margin: 8px 0 6px;
 }
 
-/* REQUIREMENT 5: Lyrics Display in Drawer */
+/* REQUIREMENT 5: Lyrics Display in Drawer & Inline Player Panel */
 .lyrics-empty-notice, .lyrics-loading {
   text-align: center;
   padding: 40px 20px;
 }
 
+.player-lyrics-drawer {
+  margin: 12px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  backdrop-filter: blur(12px);
+}
 
+.player-lyrics-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
 
+.player-inline-lyrics-body {
+  max-height: 170px;
+  overflow-y: auto;
+  padding: 12px 14px;
+  text-align: center;
+  scrollbar-width: thin;
+}
 
+.inline-lyric-line {
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.inline-lyrics-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 8px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.inline-lyrics-status.red {
+  color: #ff4757;
+  font-weight: 600;
+}
+
+.skeleton-row {
+  opacity: 0.65;
+  pointer-events: none;
+}
+.skeleton-box {
+  background: rgba(255, 255, 255, 0.07) !important;
+  animation: pulse-logo 1.4s ease infinite;
+}
+.skeleton-line {
+  height: 11px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.07);
+  margin-bottom: 6px;
+  animation: pulse-logo 1.4s ease infinite;
+}
+.skeleton-line.sk-title { width: 64%; }
+.skeleton-line.sk-sub { width: 42%; margin-bottom: 0; }
