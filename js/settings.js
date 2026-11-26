@@ -244,6 +244,15 @@ const Settings = (() => {
     const currentWp = s.wallpaper || null;
     const wpList = WALLPAPERS[activeWallpaperFolder] || [];
 
+    const hasCloudSync = typeof SupabaseSync !== 'undefined' && SupabaseSync.isConfigured();
+    const cloudUser = hasCloudSync ? SupabaseSync.getUser() : null;
+    const safeEmail = (str) => String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
     screen.innerHTML = `
       <div class="settings-container">
         <div class="settings-header">
@@ -253,6 +262,39 @@ const Settings = (() => {
         </div>
 
         <div class="settings-body">
+
+          ${hasCloudSync ? `
+          <!-- Cloud Account Sync Section -->
+          <div class="settings-section">
+            <h3 class="section-title"><i class="fas fa-cloud"></i> Cloud Account Sync</h3>
+            ${cloudUser ? `
+              <div class="subscription-status premium" style="margin-bottom:12px;">
+                <i class="fas fa-check-circle"></i>
+                <div>
+                  <strong>${safeEmail(cloudUser.email)}</strong>
+                  <small>Favourites, collections & playlists synced</small>
+                </div>
+              </div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <button class="btn-primary" style="flex:1;" onclick="Settings.syncCloudNow()">Sync Now</button>
+                <button class="btn-outline" style="flex:1;" onclick="Settings.cloudSignOut()">Sign Out</button>
+              </div>
+            ` : `
+              <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="cloudAuthEmail" class="form-input" placeholder="you@radiotym.com" />
+              </div>
+              <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="cloudAuthPassword" class="form-input" placeholder="At least 6 characters" />
+              </div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <button class="btn-primary" style="flex:1;" onclick="Settings.cloudSignIn()">Sign In</button>
+                <button class="btn-outline" style="flex:1;" onclick="Settings.cloudSignUp()">Create Account</button>
+              </div>
+            `}
+          </div>
+          ` : ''}
 
           <!-- Profile Section -->
           <div class="settings-section">
@@ -653,12 +695,60 @@ const Settings = (() => {
     renderSettings();
   }
 
+  async function cloudSignIn() {
+    const email = document.getElementById('cloudAuthEmail')?.value.trim() || '';
+    const password = document.getElementById('cloudAuthPassword')?.value || '';
+    if (!email || !password) {
+      showToast('Enter email and password', 'error');
+      return;
+    }
+    const { error } = await SupabaseSync.signIn(email, password);
+    if (error) {
+      showToast(error.message || 'Sign in failed', 'error');
+      return;
+    }
+    showToast('Signed in & synced!', 'success');
+    renderSettings();
+  }
+
+  async function cloudSignUp() {
+    const email = document.getElementById('cloudAuthEmail')?.value.trim() || '';
+    const password = document.getElementById('cloudAuthPassword')?.value || '';
+    if (!email || password.length < 6) {
+      showToast('Enter email and password (min 6 chars)', 'error');
+      return;
+    }
+    const { data, error } = await SupabaseSync.signUp(email, password);
+    if (error) {
+      showToast(error.message || 'Sign up failed', 'error');
+      return;
+    }
+    if (data && !data.session) {
+      showToast('Check your email to confirm your account', 'info');
+    } else {
+      showToast('Account created & synced!', 'success');
+    }
+    renderSettings();
+  }
+
+  async function cloudSignOut() {
+    await SupabaseSync.signOut();
+    showToast('Signed out', 'info');
+    renderSettings();
+  }
+
+  async function syncCloudNow() {
+    const ok = await SupabaseSync.pushToCloud();
+    showToast(ok ? 'Synced to cloud' : 'Sync failed', ok ? 'success' : 'error');
+  }
+
   return {
     open, close, renderSettings, saveProfile, onCountryChange,
     toggleTheme, setAdPref, subscribe, cancelPremium,
     triggerAvatarUpload, handleAvatarChange,
     switchWallpaperFolder, setWallpaper, applyWallpaper,
     setSleepTimer, setCustomSleepTimer, cancelSleepTimer,
+    cloudSignIn, cloudSignUp, cloudSignOut, syncCloudNow,
     WALLPAPERS
   };
 })();

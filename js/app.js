@@ -62,6 +62,9 @@ function saveState() {
       settings: AppState.settings,
       savedStations
     }));
+    if (typeof SupabaseSync !== 'undefined' && SupabaseSync.schedulePush) {
+      SupabaseSync.schedulePush();
+    }
   } catch(e) {}
 }
 
@@ -823,6 +826,9 @@ const App = {
     this.renderTab('home');
     if (typeof AdSystem !== 'undefined') AdSystem.init();
     this.bindSearch();
+    if (typeof SupabaseSync !== 'undefined' && SupabaseSync.init) {
+      SupabaseSync.init();
+    }
 
     // REQUIREMENT 4: Real-time Live ICY status update listener
     NowPlaying.onStatusChange((stationId, info) => {

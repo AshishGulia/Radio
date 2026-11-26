@@ -11,6 +11,15 @@ const PORT = process.env.PORT || 3000;
 // Serve static files from root directory
 app.use(express.static(__dirname));
 
+// 0. API: Public runtime configuration for Supabase client
+app.get('/api/config', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({
+    supabaseUrl: process.env.SUPABASE_URL || '',
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY || ''
+  });
+});
+
 // In-memory caches for fast, zero-delay responses
 const coverCache = new Map();
 const lyricsCache = new Map();
@@ -328,11 +337,18 @@ app.get('/api/lyrics', async (req, res) => {
   return res.json({ found: false });
 });
 
-// SPA fallback for index.html
+// SPA fallback for non-API routes
 app.get('*', (req, res) => {
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'API route not found' });
+  }
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`RadioTym server running at http://0.0.0.0:${PORT}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`RadioTym server running at http://0.0.0.0:${PORT}`);
+  });
+}
+
+export default app;
