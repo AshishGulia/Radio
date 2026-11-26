@@ -50,10 +50,15 @@ const SupabaseSync = (() => {
 
   function buildPayload() {
     const savedStations = {};
-    (AppState.favourites || []).forEach(id => {
+    [...(AppState.favourites || []), ...(AppState.recentChannels || [])].forEach(id => {
       const st = (typeof RadioData !== 'undefined' && RadioData.getById) ? RadioData.getById(id) : null;
       if (st) savedStations[String(id)] = st;
     });
+    savedStations.__recent = {
+      channels: AppState.recentChannels || [],
+      songs: AppState.recentSongs || [],
+      genres: AppState.recentGenres || []
+    };
 
     return {
       id: currentUser.id,
@@ -94,8 +99,16 @@ const SupabaseSync = (() => {
 
       isApplyingRemote = true;
       try {
-        if (data.saved_stations && typeof RadioData !== 'undefined' && RadioData.liveStationsMap) {
-          Object.assign(RadioData.liveStationsMap, data.saved_stations);
+        if (data.saved_stations && typeof data.saved_stations === 'object') {
+          const { __recent, ...stationEntries } = data.saved_stations;
+          if (typeof RadioData !== 'undefined' && RadioData.liveStationsMap) {
+            Object.assign(RadioData.liveStationsMap, stationEntries);
+          }
+          if (__recent) {
+            if (Array.isArray(__recent.channels)) AppState.recentChannels = __recent.channels.map(String);
+            if (Array.isArray(__recent.songs))    AppState.recentSongs = __recent.songs;
+            if (Array.isArray(__recent.genres))   AppState.recentGenres = __recent.genres.map(String);
+          }
         }
         if (Array.isArray(data.collections) && data.collections.length) {
           AppState.collections = data.collections;

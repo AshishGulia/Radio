@@ -37,6 +37,9 @@ const AppState = {
   stationIndex: 0,
   browseCountry: 'India',
   categoryFilter: null,
+  recentChannels: [],
+  recentSongs: [],
+  recentGenres: [],
 };
 
 // ─── PERSISTENCE (localStorage) ──────────────────────────────────────────────
@@ -48,7 +51,7 @@ function escapeQuotes(str) {
 function saveState() {
   try {
     const savedStations = {};
-    (AppState.favourites || []).forEach(id => {
+    [...(AppState.favourites || []), ...(AppState.recentChannels || [])].forEach(id => {
       const st = (typeof RadioData !== 'undefined' && RadioData.getById) ? RadioData.getById(id) : null;
       if (st) savedStations[String(id)] = st;
     });
@@ -60,6 +63,9 @@ function saveState() {
       userState: AppState.userState,
       theme: AppState.theme,
       settings: AppState.settings,
+      recentChannels: AppState.recentChannels,
+      recentSongs: AppState.recentSongs,
+      recentGenres: AppState.recentGenres,
       savedStations
     }));
     if (typeof SupabaseSync !== 'undefined' && SupabaseSync.schedulePush) {
@@ -80,6 +86,9 @@ function loadState() {
     if (saved.savedStations && typeof RadioData !== 'undefined' && RadioData.liveStationsMap) {
       Object.assign(RadioData.liveStationsMap, saved.savedStations);
     }
+    if (Array.isArray(saved.recentChannels)) AppState.recentChannels = saved.recentChannels.map(String);
+    if (Array.isArray(saved.recentSongs))    AppState.recentSongs = saved.recentSongs;
+    if (Array.isArray(saved.recentGenres))   AppState.recentGenres = saved.recentGenres.map(String);
     if (saved.collections && Array.isArray(saved.collections) && saved.collections.length) {
       AppState.collections = saved.collections;
     } else {
@@ -874,88 +883,325 @@ const App = {
     }
   },
 
-  // ─── TAB 1: HOME (LOCAL, GLOBAL, GENRE ROWS WITH HORIZONTAL SLIDES) ────────
+  // ─── TAB 1: HOME (RECENT CHANNELS, RECENT SONGS, RECENT GENRES) ───────────
+  normalizeGenreId(rawTag) {
+    if (!rawTag) return null;
+    const tag = String(rawTag).toLowerCase().trim();
+    const aliasMap = {
+      lofi: 'lo-fi',
+      'lo-fi': 'lo-fi',
+      hiphop: 'hip-hop',
+      'hip-hop': 'hip-hop',
+      'hip hop': 'hip-hop',
+      rnb: 'r-and-b',
+      'r&b': 'r-and-b',
+      'r-and-b': 'r-and-b',
+      soul: 'r-and-b',
+      kpop: 'k-pop',
+      'k-pop': 'k-pop',
+      edm: 'electronic',
+      dance: 'electronic',
+      techno: 'electronic',
+      house: 'electronic',
+      oldies: 'retro',
+      '80s': 'retro',
+      '90s': 'retro',
+      hindi: 'bollywood'
+    };
+    const mapped = aliasMap[tag] || tag;
+    const found = CATEGORY_FEATURED.find(c => c.id === mapped || c.name.toLowerCase() === tag);
+    return found ? found.id : null;
+  },
+
+  recordRecentChannel(station) {
+    if (!station) return;
+    const sid = String(station.id || station.stationuuid || '');
+    if (!sid) return;
+
+    if (typeof RadioData !== 'undefined' && RadioData.liveStationsMap) {
+      RadioData.liveStationsMap[sid] = station;
+    }
+
+    const list = (AppState.recentChannels || []).map(String).filter(id => id !== sid);
+    list.unshift(sid);
+    AppState.recentChannels = list.slice(0, 20);
+
+    // Record matching genre(s) automatically from station categories/tags
+    const rawCats = Array.isArray(station.category)
+      ? station.category
+      : String(station.tags || '').split(',');
+    let recordedGenre = false;
+    rawCats.forEach(t => {
+      if (recordedGenre) return;
+      const gid = this.normalizeGenreId(t);
+      if (gid) {
+        this.recordRecentGenre(gid, true);
+        recordedGenre = true;
+      }
+    });
+
+    saveState();
+    if (AppState.currentTab === 'home') {
+      this.renderHome();
+    }
+  },
+
+  recordRecentSong({ song, artist, stationId, stationName, thumb }) {
+    if (!song || !artist) return;
+    const cleanSong = String(song).trim();
+    const cleanArtist = String(artist).trim();
+    if (!cleanSong || !cleanArtist) return;
+
+    const key = `${cleanSong.toLowerCase()}___${cleanArtist.toLowerCase()}`;
+    const existing = (AppState.recentSongs || []).find(
+      s => `${(s.title || '').toLowerCase()}___${(s.artist || '').toLowerCase()}` === key
+    );
+    const resolvedThumb = thumb || (existing && existing.thumb) || '';
+    const filtered = (AppState.recentSongs || []).filter(
+      s => `${(s.title || '').toLowerCase()}___${(s.artist || '').toLowerCase()}` !== key
+    );
+
+    filtered.unshift({
+      id: 'rs_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+      title: cleanSong,
+      artist: cleanArtist,
+      stationId: String(stationId || ''),
+      stationName: stationName || 'Live Radio',
+      thumb: resolvedThumb,
+      playedAt: Date.now()
+    });
+    AppState.recentSongs = filtered.slice(0, 20);
+    saveState();
+
+    if (AppState.currentTab === 'home') {
+      this.renderHome();
+    }
+  },
+
+  updateRecentSongThumb(song, artist, thumb) {
+    if (!song || !artist || !thumb) return;
+    const key = `${String(song).trim().toLowerCase()}___${String(artist).trim().toLowerCase()}`;
+    const match = (AppState.recentSongs || []).find(
+      s => `${(s.title || '').toLowerCase()}___${(s.artist || '').toLowerCase()}` === key
+    );
+    if (match && match.thumb !== thumb) {
+      match.thumb = thumb;
+      saveState();
+      if (AppState.currentTab === 'home') {
+        this.renderHome();
+      }
+    }
+  },
+
+  recordRecentGenre(catId, skipSave = false) {
+    const gid = this.normalizeGenreId(catId) || (CATEGORY_FEATURED.some(c => c.id === catId) ? catId : null);
+    if (!gid) return;
+    const list = (AppState.recentGenres || []).filter(id => id !== gid);
+    list.unshift(gid);
+    AppState.recentGenres = list.slice(0, 15);
+    if (!skipSave) {
+      saveState();
+      if (AppState.currentTab === 'home') {
+        this.renderHome();
+      }
+    }
+  },
+
+  buildHomeSongCard(item) {
+    const sid = String(item.stationId || '');
+    const st = sid && typeof RadioData !== 'undefined' && RadioData.getById ? RadioData.getById(sid) : null;
+    const fallbackThumb = st ? getStationFavicon(st) : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80';
+    const thumb = item.thumb || fallbackThumb;
+    return `
+      <div class="home-song-card" onclick="${sid ? `App.openStation('${escapeQuotes(sid)}')` : `App.renderTab('browse')`}">
+        <div class="home-song-art-wrap">
+          <img class="home-song-art" src="${escapeHtml(thumb)}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="handleImageError(this)" />
+          <span class="home-song-play-badge"><i class="fas fa-play"></i></span>
+        </div>
+        <span class="home-song-title">${escapeHtml(item.title)}</span>
+        <span class="home-song-artist">${escapeHtml(item.artist)}</span>
+      </div>
+    `;
+  },
+
   renderHome() {
     const content = document.getElementById('content');
     if (!content) return;
 
-    const userCountry = AppState.settings.country || 'India';
-    const countryStates = (typeof RadioData !== 'undefined' && RadioData.getStatesForCountry)
-      ? RadioData.getStatesForCountry(userCountry)
-      : [];
-    if (!AppState.userState && countryStates.length) {
-      AppState.userState = countryStates[0].name;
-    }
-    const userState = AppState.userState || (countryStates[0] ? countryStates[0].name : userCountry);
+    const recentChannelStations = (AppState.recentChannels || [])
+      .map(id => (typeof RadioData !== 'undefined' && RadioData.getById) ? RadioData.getById(id) : null)
+      .filter(Boolean);
 
-    let localStations = (typeof RadioData !== 'undefined' && RadioData.getStationsByState)
-      ? RadioData.getStationsByState(userCountry, userState)
-      : [];
-    if (!localStations.length && typeof RadioData !== 'undefined' && RadioData.getByCountry) {
-      localStations = RadioData.getByCountry(userCountry);
-    }
-    if (!localStations.length && typeof RadioData !== 'undefined' && RadioData.stations) {
-      localStations = RadioData.stations.slice(0, 18);
-    }
-    localStations = localStations.slice(0, 18);
+    const recentSongsList = (AppState.recentSongs || []).slice(0, 18);
 
-    const globalStations = (typeof RadioData !== 'undefined' && RadioData.stations) ? RadioData.stations.slice(0, 18) : [];
+    const recentGenreItems = (AppState.recentGenres || [])
+      .map(id => CATEGORY_FEATURED.find(c => c.id === id))
+      .filter(Boolean);
 
     content.innerHTML = `
       <div class="tab-content home-tab">
-        <!-- SEARCH BAR -->
-        <div class="search-bar-wrap">
-          <div class="search-bar">
-            <i class="fas fa-search"></i>
-            <input type="text" id="searchInput"
-                   placeholder="Search worldwide live radio, song, artist…"
-                   value="${this.liveFilter.query}"
-                   oninput="App.handleLiveSearch(this.value)" />
-            <button class="search-clear" id="searchClear" onclick="App.clearLiveSearch()"
-                   style="${this.liveFilter.query ? 'display:block' : 'display:none'}">✕</button>
+        <!-- ROW 1: RECENT CHANNELS -->
+        <div class="home-section-block" style="margin-top:14px;">
+          <div class="home-section-header">
+            <div>
+              <h3><i class="fas fa-history" style="color:var(--accent);"></i> Recent channels</h3>
+            </div>
+            <button class="see-all-btn" onclick="${recentChannelStations.length ? 'App.openRecentChannelsView()' : "App.renderTab('browse')"}">
+              ${recentChannelStations.length ? 'See all' : 'Browse'} <i class="fas fa-chevron-right"></i>
+            </button>
           </div>
+          ${recentChannelStations.length ? `
+            <div class="home-horizontal-slider">
+              ${recentChannelStations.slice(0, 18).map(s => buildHomeThumbnailCard(s)).join('')}
+            </div>
+          ` : `
+            <div class="home-empty-row-card" onclick="App.renderTab('browse')">
+              <i class="fas fa-radio"></i>
+              <div>
+                <strong>No recent channels yet</strong>
+                <span>Tap to explore stations in Browse</span>
+              </div>
+              <i class="fas fa-chevron-right"></i>
+            </div>
+          `}
         </div>
 
-        <!-- ROW 1: LOCAL STATIONS (USER'S STATE & ALL STATES ACCESS) -->
+        <!-- ROW 2: RECENT SONGS -->
         <div class="home-section-block">
           <div class="home-section-header">
             <div>
-              <h3><i class="fas fa-map-marker-alt" style="color:var(--accent);"></i> Local Stations (${escapeHtml(userState)})</h3>
-              <span class="home-section-sub">${escapeHtml(userCountry)} • State: <strong>${escapeHtml(userState)}</strong></span>
+              <h3><i class="fas fa-music" style="color:var(--accent);"></i> Recent songs</h3>
             </div>
-            <button class="see-all-btn" onclick="App.openLocalStateView()" title="Explore all states and their radio stations">
-              See All <i class="fas fa-chevron-right"></i>
+            <button class="see-all-btn" onclick="${recentSongsList.length ? 'App.openRecentSongsView()' : "App.renderTab('browse')"}">
+              ${recentSongsList.length ? 'See all' : 'Browse'} <i class="fas fa-chevron-right"></i>
             </button>
           </div>
-          <div class="home-horizontal-slider">
-            ${localStations.map(s => buildHomeThumbnailCard(s)).join('')}
-          </div>
+          ${recentSongsList.length ? `
+            <div class="home-horizontal-slider">
+              ${recentSongsList.map(song => this.buildHomeSongCard(song)).join('')}
+            </div>
+          ` : `
+            <div class="home-empty-row-card" onclick="App.renderTab('browse')">
+              <i class="fas fa-compact-disc"></i>
+              <div>
+                <strong>No recent songs yet</strong>
+                <span>Play live music stations to see tracks here</span>
+              </div>
+              <i class="fas fa-chevron-right"></i>
+            </div>
+          `}
         </div>
 
-        <!-- ROW 2: GLOBAL STATIONS -->
+        <!-- ROW 3: RECENT GENRES -->
         <div class="home-section-block">
           <div class="home-section-header">
-            <h3><i class="fas fa-globe" style="color:var(--accent);"></i> Global Stations</h3>
-            <button class="see-all-btn" onclick="App.renderTab('browse')" title="Browse all ${RadioData.countries ? RadioData.countries.length : 270} countries">
-              See All <i class="fas fa-chevron-right"></i>
+            <div>
+              <h3><i class="fas fa-layer-group" style="color:var(--accent);"></i> Recent genres</h3>
+            </div>
+            <button class="see-all-btn" onclick="${recentGenreItems.length ? 'App.openRecentGenresView()' : 'App.openAllGenresView()'}">
+              ${recentGenreItems.length ? 'See all' : 'All genres'} <i class="fas fa-chevron-right"></i>
             </button>
           </div>
-          <div class="home-horizontal-slider">
-            ${globalStations.map(s => buildHomeThumbnailCard(s)).join('')}
-          </div>
+          ${recentGenreItems.length ? `
+            <div class="home-horizontal-slider">
+              ${recentGenreItems.map(cat => buildHomeGenreThumbnailCard(cat)).join('')}
+            </div>
+          ` : `
+            <div class="home-empty-row-card" onclick="App.renderTab('browse')">
+              <i class="fas fa-sliders-h"></i>
+              <div>
+                <strong>No recent genres yet</strong>
+                <span>Open any genre in Browse to save it here</span>
+              </div>
+              <i class="fas fa-chevron-right"></i>
+            </div>
+          `}
         </div>
+      </div>
+    `;
+  },
 
-        <!-- ROW 3: GENRES LIST (ONLY GENRES — TAP FOR WORLDWIDE POPULAR MIX) -->
-        <div class="home-section-block">
-          <div class="home-section-header">
-            <h3><i class="fas fa-music" style="color:var(--accent);"></i> Genres</h3>
-            <button class="see-all-btn" onclick="App.openAllGenresView()" title="View all music genres">
-              See All <i class="fas fa-chevron-right"></i>
-            </button>
+  openRecentChannelsView() {
+    const stations = (AppState.recentChannels || [])
+      .map(id => RadioData.getById(id))
+      .filter(Boolean);
+    this.renderStationList('Recent channels', stations);
+  },
+
+  openRecentSongsView() {
+    const content = document.getElementById('content');
+    if (!content) return;
+    const songs = AppState.recentSongs || [];
+    content.innerHTML = `
+      <div class="tab-content list-tab">
+        <div class="list-header">
+          <button class="icon-btn back-btn" onclick="App.renderTab('home')" aria-label="Back">
+            <i class="fas fa-arrow-left"></i>
+          </button>
+          <h2 class="list-title">Recent songs</h2>
+          <div></div>
+        </div>
+        ${songs.length ? `
+          <div class="songs-list-view" style="padding:0 16px 24px;">
+            ${songs.map(song => {
+              const sid = String(song.stationId || '');
+              const st = sid ? RadioData.getById(sid) : null;
+              const thumb = song.thumb || (st ? getStationFavicon(st) : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&auto=format&fit=crop&q=80');
+              return `
+                <div class="song-row-item" onclick="${sid ? `App.openStation('${escapeQuotes(sid)}')` : `App.renderTab('browse')`}">
+                  <img class="song-row-thumb" src="${escapeHtml(thumb)}" alt="${escapeHtml(song.title)}" onerror="handleImageError(this)" />
+                  <div class="song-row-meta">
+                    <h4 class="song-row-title">${escapeHtml(song.title)}</h4>
+                    <p class="song-row-artist"><i class="fas fa-microphone-alt"></i> ${escapeHtml(song.artist)}</p>
+                    <span class="song-row-source"><i class="fas fa-broadcast-tower"></i> ${escapeHtml(song.stationName || 'Live Radio')}</span>
+                  </div>
+                </div>
+              `;
+            }).join('')}
           </div>
-          <div class="home-horizontal-slider">
-            ${CATEGORY_FEATURED.map(cat => buildHomeGenreThumbnailCard(cat)).join('')}
+        ` : `
+          <div class="empty-state">
+            <i class="fas fa-music"></i>
+            <p>No recent songs yet</p>
+            <small>Listen to a music station to build your song history.</small>
           </div>
+        `}
+      </div>
+    `;
+  },
+
+  openRecentGenresView() {
+    const content = document.getElementById('content');
+    if (!content) return;
+    const recentGenreItems = (AppState.recentGenres || [])
+      .map(id => RadioData.categories.find(c => c.id === id) || CATEGORY_FEATURED.find(c => c.id === id))
+      .filter(Boolean);
+    content.innerHTML = `
+      <div class="tab-content list-tab all-genres-tab">
+        <div class="list-header">
+          <button class="icon-btn back-btn" onclick="App.renderTab('home')" aria-label="Back">
+            <i class="fas fa-arrow-left"></i>
+          </button>
+          <h2 class="list-title">Recent genres <span class="count-badge">${recentGenreItems.length}</span></h2>
+          <div></div>
+        </div>
+        <div class="genre-list-rows-wrap">
+          ${recentGenreItems.map(cat => `
+            <div class="genre-list-row" onclick="App.openCategory('${cat.id}')">
+              <div class="genre-row-left">
+                <span class="genre-icon-square" style="background:${cat.color}">
+                  <i class="fas ${cat.icon || 'fa-music'}"></i>
+                </span>
+                <div class="genre-row-meta">
+                  <span class="genre-row-title">${escapeHtml(cat.name)}</span>
+                  <span class="genre-row-desc">${escapeHtml(cat.desc || 'World radio channels')}</span>
+                </div>
+              </div>
+              <div class="genre-row-right">
+                <i class="fas fa-chevron-right genre-row-chevron"></i>
+              </div>
+            </div>
+          `).join('')}
         </div>
       </div>
     `;
@@ -1006,7 +1252,7 @@ const App = {
     content.innerHTML = `
       <div class="tab-content local-states-tab">
         <div class="local-states-header">
-          <button class="icon-btn back-btn" onclick="App.renderTab('home')" aria-label="Back">
+          <button class="icon-btn back-btn" onclick="App.renderTab('browse')" aria-label="Back">
             <i class="fas fa-arrow-left"></i>
           </button>
           <div class="local-states-title-wrap">
@@ -1300,9 +1546,25 @@ const App = {
     const clearBtn = document.getElementById('searchClear');
     if (clearBtn) clearBtn.style.display = query ? 'block' : 'none';
 
+    const trimmed = (query || '').trim();
+    const dashboardRows = document.getElementById('browseDashboardRows');
+    const searchResults = document.getElementById('browseSearchResults');
+
+    if (!trimmed) {
+      if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
+      this.liveFilter.query = '';
+      this.liveFilter.offset = 0;
+      if (dashboardRows) dashboardRows.style.display = 'block';
+      if (searchResults) searchResults.style.display = 'none';
+      return;
+    }
+
+    if (dashboardRows) dashboardRows.style.display = 'none';
+    if (searchResults) searchResults.style.display = 'block';
+
     if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
     this.searchDebounceTimer = setTimeout(() => {
-      this.liveFilter.query = query.trim();
+      this.liveFilter.query = trimmed;
       this.liveFilter.offset = 0;
       this.loadLiveStations(false);
     }, 350);
@@ -1316,7 +1578,11 @@ const App = {
 
     this.liveFilter.query = '';
     this.liveFilter.offset = 0;
-    this.loadLiveStations(false);
+
+    const dashboardRows = document.getElementById('browseDashboardRows');
+    const searchResults = document.getElementById('browseSearchResults');
+    if (dashboardRows) dashboardRows.style.display = 'block';
+    if (searchResults) searchResults.style.display = 'none';
   },
 
   bindSearch() {
@@ -1345,15 +1611,15 @@ const App = {
     const totalSongs = AppState.playlists.reduce((acc, p) => acc + (p.songs || []).length, 0);
     const section = AppState.favouritesSection; // null | 'collections' | 'playlists'
 
-    // ROOT VIEW: SHOW ONLY 2 BUTTONS (UPPER: COLLECTIONS, LOWER: PLAYLISTS)
+    // ROOT VIEW: SHOW ONLY 2 FULL-HEIGHT BUTTONS (UPPER: COLLECTIONS, LOWER: PLAYLISTS)
     if (!section) {
       content.innerHTML = `
-        <div class="tab-content favs-tab">
+        <div class="tab-content favs-tab favs-root-tab">
           <div class="favs-tab-header">
             <h2 class="tab-heading">❤️ Favourites</h2>
           </div>
 
-          <div class="favs-segments-stack">
+          <div class="favs-segments-stack favs-full-stack">
             <!-- UPPER BUTTON: COLLECTIONS -->
             <button class="favs-big-button upper-btn"
                     onclick="App.openFavouritesSection('collections')"
@@ -1470,7 +1736,7 @@ const App = {
               <i class="fas fa-folder-open"></i>
               <p>No stations saved in "${col.name}" yet</p>
               <small>Tap the ❤️ icon on any FM channel to save it in "${col.name}".</small>
-              <button class="btn-primary" onclick="App.renderTab('home')">Explore Channels</button>
+              <button class="btn-primary" onclick="App.renderTab('browse')">Explore Channels</button>
             </div>
           `}
         </div>
@@ -1586,7 +1852,7 @@ const App = {
               <i class="fas fa-music"></i>
               <p>No songs saved in "${pl.name}" yet</p>
               <small>Tap the bookmark 🔖 icon in the music player while any song is playing to save it here.</small>
-              <button class="btn-primary" onclick="App.renderTab('home')">Listen to Live Radio</button>
+              <button class="btn-primary" onclick="App.renderTab('browse')">Listen to Live Radio</button>
             </div>
           `}
         </div>
@@ -1642,12 +1908,121 @@ const App = {
     `;
   },
 
-  // ─── TAB 3: BROWSE BY COUNTRY (LAYOUT 3 OF 2 ROWS + OTHER COUNTRIES) ────────
+  // ─── TAB 3: BROWSE (DASHBOARD: SEARCH, LOCAL STATIONS, GLOBAL STATIONS, GENRES) ─
   renderBrowse() {
     const content = document.getElementById('content');
     if (!content) return;
 
-    // Top row major countries list
+    const userCountry = AppState.settings.country || 'India';
+    const countryStates = (typeof RadioData !== 'undefined' && RadioData.getStatesForCountry)
+      ? RadioData.getStatesForCountry(userCountry)
+      : [];
+    if (!AppState.userState && countryStates.length) {
+      AppState.userState = countryStates[0].name;
+    }
+    const userState = AppState.userState || (countryStates[0] ? countryStates[0].name : userCountry);
+
+    let localStations = (typeof RadioData !== 'undefined' && RadioData.getStationsByState)
+      ? RadioData.getStationsByState(userCountry, userState)
+      : [];
+    if (!localStations.length && typeof RadioData !== 'undefined' && RadioData.getByCountry) {
+      localStations = RadioData.getByCountry(userCountry);
+    }
+    if (!localStations.length && typeof RadioData !== 'undefined' && RadioData.stations) {
+      localStations = RadioData.stations.slice(0, 18);
+    }
+    localStations = localStations.slice(0, 18);
+
+    const globalStations = (typeof RadioData !== 'undefined' && RadioData.stations) ? RadioData.stations.slice(0, 18) : [];
+    const hasQuery = Boolean(this.liveFilter.query && this.liveFilter.query.trim());
+
+    content.innerHTML = `
+      <div class="tab-content home-tab browse-tab">
+        <!-- SEARCH BAR -->
+        <div class="search-bar-wrap">
+          <div class="search-bar">
+            <i class="fas fa-search"></i>
+            <input type="text" id="searchInput"
+                   placeholder="Search worldwide live radio, song, artist…"
+                   value="${escapeHtml(this.liveFilter.query)}"
+                   oninput="App.handleLiveSearch(this.value)" />
+            <button class="search-clear" id="searchClear" onclick="App.clearLiveSearch()"
+                   style="${hasQuery ? 'display:block' : 'display:none'}">✕</button>
+          </div>
+        </div>
+
+        <!-- LIVE SEARCH RESULTS (VISIBLE WHEN SEARCHING) -->
+        <div id="browseSearchResults" style="${hasQuery ? 'display:block' : 'display:none'}; padding: 0 16px 24px;">
+          <div class="home-section-header" style="margin-bottom:10px;">
+            <h3><i class="fas fa-search" style="color:var(--accent);"></i> Search results</h3>
+            <span class="home-count-pill" id="feedCountPill">0 channels</span>
+          </div>
+          <div id="liveStationsContainer" class="stations-list-view"></div>
+          <div class="load-more-container" id="loadMoreContainer" style="display:none;padding:16px 0;">
+            <button class="load-more-btn" id="loadMoreBtn" onclick="App.loadMoreStations()">
+              <i class="fas fa-plus-circle"></i>
+              <span>Load More Stations (+50)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- DASHBOARD ROWS (LOCAL STATIONS, GLOBAL STATIONS, GENRES) -->
+        <div id="browseDashboardRows" style="${hasQuery ? 'display:none' : 'display:block'}">
+          <!-- ROW 1: LOCAL STATIONS -->
+          <div class="home-section-block">
+            <div class="home-section-header">
+              <div>
+                <h3><i class="fas fa-map-marker-alt" style="color:var(--accent);"></i> Local stations (${escapeHtml(userState)})</h3>
+                <span class="home-section-sub">${escapeHtml(userCountry)} • State: <strong>${escapeHtml(userState)}</strong></span>
+              </div>
+              <button class="see-all-btn" onclick="App.openLocalStateView()" title="Explore all states and their radio stations">
+                See all <i class="fas fa-chevron-right"></i>
+              </button>
+            </div>
+            <div class="home-horizontal-slider">
+              ${localStations.map(s => buildHomeThumbnailCard(s)).join('')}
+            </div>
+          </div>
+
+          <!-- ROW 2: GLOBAL STATIONS -->
+          <div class="home-section-block">
+            <div class="home-section-header">
+              <h3><i class="fas fa-globe" style="color:var(--accent);"></i> Global stations</h3>
+              <button class="see-all-btn" onclick="App.openCountryBrowseView()" title="Browse all ${RadioData.countries ? RadioData.countries.length : 270} countries">
+                See all <i class="fas fa-chevron-right"></i>
+              </button>
+            </div>
+            <div class="home-horizontal-slider">
+              ${globalStations.map(s => buildHomeThumbnailCard(s)).join('')}
+            </div>
+          </div>
+
+          <!-- ROW 3: GENRES -->
+          <div class="home-section-block">
+            <div class="home-section-header">
+              <h3><i class="fas fa-music" style="color:var(--accent);"></i> Genres</h3>
+              <button class="see-all-btn" onclick="App.openAllGenresView()" title="View all music genres">
+                See all <i class="fas fa-chevron-right"></i>
+              </button>
+            </div>
+            <div class="home-horizontal-slider">
+              ${CATEGORY_FEATURED.map(cat => buildHomeGenreThumbnailCard(cat)).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    if (hasQuery) {
+      this.loadLiveStations(false);
+    }
+  },
+
+  // ─── BROWSE BY COUNTRY VIEW (OPENED FROM GLOBAL STATIONS -> SEE ALL) ──────
+  openCountryBrowseView() {
+    const content = document.getElementById('content');
+    if (!content) return;
+
     const topCountries = [
       { name: "India",       flag: "🇮🇳" },
       { name: "UK",          flag: "🇬🇧" },
@@ -1671,8 +2046,11 @@ const App = {
     content.innerHTML = `
       <div class="tab-content browse-tab">
         <div class="browse-header-row">
-          <div>
-            <h2 class="tab-heading">🌍 Browse by Country</h2>
+          <button class="icon-btn back-btn" onclick="App.renderTab('browse')" aria-label="Back to Browse" style="margin-right:8px;">
+            <i class="fas fa-arrow-left"></i>
+          </button>
+          <div style="flex:1;min-width:0;">
+            <h2 class="tab-heading">🌍 Global stations</h2>
             <p class="tab-subheading">Select any country to view its local FM radio channels</p>
           </div>
           <button class="icon-btn filter-btn" onclick="App.toggleFilterPanel()" title="Filter Stations">
@@ -1993,6 +2371,7 @@ const App = {
   },
 
   openCategory(catId) {
+    this.recordRecentGenre(catId);
     this.renderGenreView(catId);
   },
 

@@ -190,8 +190,17 @@ const NowPlaying = (() => {
           lastChecked: Date.now()
         };
 
-        // If GREEN (Song Playing), trigger auto-lyrics and real album cover
+        // If GREEN (Song Playing), trigger auto-lyrics, recent song history, and real album cover
         if (evaluated.isMusic) {
+          if (typeof App !== 'undefined' && App.recordRecentSong) {
+            App.recordRecentSong({
+              song: evaluated.song,
+              artist: evaluated.artist,
+              stationId: activeStation.id,
+              stationName: activeStation.name,
+              thumb: (stationCache[activeStation.id] && stationCache[activeStation.id].thumb) || ''
+            });
+          }
           // REQUIREMENT 5: Auto-fetch lyrics when a song plays
           if (typeof LyricsEngine !== 'undefined' && LyricsEngine.autoFetch) {
             LyricsEngine.autoFetch(evaluated.artist, evaluated.song);
@@ -255,6 +264,9 @@ const NowPlaying = (() => {
           artworkCache.set(key, data.thumb);
           if (stationCache[stationId]) {
             stationCache[stationId].thumb = data.thumb;
+          }
+          if (typeof App !== 'undefined' && App.updateRecentSongThumb) {
+            App.updateRecentSongThumb(song, artist, data.thumb);
           }
           updateActivePlayerCover(stationId, data.thumb);
           pendingFetches.delete(key);

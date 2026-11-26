@@ -608,8 +608,9 @@ const Settings = (() => {
     saveState();
     showToast('Profile saved!', 'success');
 
-    // Refresh home if country/state changed
-    if (AppState.currentTab === 'home') App.renderHome();
+    // Refresh active discovery/home view if country/state changed
+    if (AppState.currentTab === 'browse') App.renderBrowse();
+    else if (AppState.currentTab === 'home') App.renderHome();
   }
 
   function toggleTheme(isDark) {

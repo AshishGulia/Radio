@@ -81,6 +81,10 @@ const Player = (() => {
     currentStation = station;
     AppState.currentStation = station;
 
+    if (typeof App !== 'undefined' && App.recordRecentChannel) {
+      App.recordRecentChannel(station);
+    }
+
     // Update station index in current browsing list or fallback to all stations
     if (!AppState.stationList || !AppState.stationList.length) {
       AppState.stationList = (typeof RadioData !== 'undefined' && RadioData.stations) ? RadioData.stations : [station];
