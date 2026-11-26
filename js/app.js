@@ -8,13 +8,20 @@ const DEFAULT_COLLECTIONS = [
   { id: 'workout', name: 'Workout Energy', icon: 'fa-bolt', color: '#2ed573', stationIds: [] }
 ];
 
+const DEFAULT_PLAYLISTS = [
+  { id: 'liked_songs', name: 'Liked Songs', icon: 'fa-heart', color: '#ff4757', songs: [] }
+];
+
 const AppState = {
   currentTab: 'home',
   currentStation: null,
   isPlaying: false,
   favourites: [],
   collections: JSON.parse(JSON.stringify(DEFAULT_COLLECTIONS)),
+  playlists: JSON.parse(JSON.stringify(DEFAULT_PLAYLISTS)),
   activeCollectionId: null,
+  activePlaylistId: null,
+  favouritesSegment: 'channels', // 'channels' or 'playlists'
   theme: 'dark',
   settings: {
     country: 'India',
@@ -46,6 +53,7 @@ function saveState() {
     localStorage.setItem('radiowave_state', JSON.stringify({
       favourites: AppState.favourites,
       collections: AppState.collections,
+      playlists: AppState.playlists,
       theme: AppState.theme,
       settings: AppState.settings,
       savedStations
@@ -67,6 +75,11 @@ function loadState() {
       AppState.collections = saved.collections;
     } else {
       AppState.collections = JSON.parse(JSON.stringify(DEFAULT_COLLECTIONS));
+    }
+    if (saved.playlists && Array.isArray(saved.playlists) && saved.playlists.length) {
+      AppState.playlists = saved.playlists;
+    } else {
+      AppState.playlists = JSON.parse(JSON.stringify(DEFAULT_PLAYLISTS));
     }
     if (saved.favourites && Array.isArray(saved.favourites)) {
       AppState.favourites = saved.favourites.map(String);
@@ -361,6 +374,221 @@ function openNewCollectionPrompt() {
   });
   saveState();
   showToast(`Collection "${name.trim()}" created!`, 'success');
+  if (AppState.currentTab === 'favourites') {
+    App.renderFavourites();
+  }
+}
+
+// ─── PLAYLIST MODAL & SONG MANAGEMENT ────────────────────────────────────────
+function openPlaylistModal(stationId) {
+  const station = RadioData.getById(stationId);
+  if (!station) return;
+  const songInfo = NowPlaying.getSongInfo(stationId);
+  const modal = document.getElementById('collection-modal');
+  if (!modal) return;
+
+  const songObj = {
+    id: 'song_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+    title: songInfo.song,
+    artist: songInfo.artist,
+    stationName: station.name,
+    stationId: String(station.id),
+    thumb: songInfo.thumb || getStationFavicon(station),
+    addedAt: Date.now()
+  };
+
+  const playlists = AppState.playlists || [];
+
+  modal.innerHTML = `
+    <div class="col-modal-backdrop" onclick="closeCollectionModal()"></div>
+    <div class="col-modal-content">
+      <div class="col-modal-handle"></div>
+      
+      <div class="col-modal-header">
+        <div class="col-modal-station-info">
+          <div class="col-modal-freq-logo" style="background:${station.color}22;border:1px solid ${station.color}55;">
+            <img src="${songObj.thumb}" alt="${escapeQuotes(songInfo.song)}"
+                 style="width:30px;height:30px;object-fit:cover;border-radius:6px;"
+                 onerror="this.onerror=null;this.src='${RADIO_SVG_FALLBACK}';" />
+          </div>
+          <div class="col-modal-text">
+            <h3 class="col-modal-title">Save Song to Playlist</h3>
+            <p class="col-modal-subtitle">${escapeQuotes(songInfo.song)} • ${escapeQuotes(songInfo.artist)}</p>
+          </div>
+        </div>
+        <button class="col-modal-close" onclick="closeCollectionModal()" aria-label="Close">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <div class="col-modal-section-title">
+        <i class="fas fa-list-music"></i> Choose Playlist(s):
+      </div>
+
+      <div class="col-list" id="playlistOptionsList">
+        ${playlists.map(pl => {
+          const hasSong = (pl.songs || []).some(s => s.title.toLowerCase() === songObj.title.toLowerCase() && s.artist.toLowerCase() === songObj.artist.toLowerCase());
+          return `
+            <div class="col-check-item ${hasSong ? 'selected' : ''}" 
+                 onclick="toggleSongInPlaylist('${pl.id}', ${JSON.stringify(songObj).replace(/"/g, '&quot;')}, this)">
+              <div class="col-item-left">
+                <span class="col-item-icon" style="background:${pl.color}22;color:${pl.color}">
+                  <i class="fas ${pl.icon || 'fa-music'}"></i>
+                </span>
+                <div class="col-item-meta">
+                  <span class="col-item-name">${pl.name}</span>
+                  <span class="col-item-count">${(pl.songs || []).length} songs</span>
+                </div>
+              </div>
+              <div class="col-item-checkbox">
+                <i class="fas ${hasSong ? 'fa-check-circle' : 'fa-circle'}"></i>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+
+      <!-- CREATE NEW PLAYLIST INLINE -->
+      <div class="col-create-section">
+        <div class="col-create-input-wrap">
+          <i class="fas fa-plus-circle"></i>
+          <input type="text" id="newPlaylistInput" placeholder="New playlist name (e.g. Punjabi Party)…" 
+                 onkeydown="if(event.key==='Enter') createNewPlaylistWithSong(${JSON.stringify(songObj).replace(/"/g, '&quot;')})" />
+          <button class="btn-create-col" onclick="createNewPlaylistWithSong(${JSON.stringify(songObj).replace(/"/g, '&quot;')})">Create</button>
+        </div>
+      </div>
+
+      <div class="col-modal-footer">
+        <button class="btn-primary col-done-btn" onclick="closeCollectionModal()">
+          <i class="fas fa-check"></i> Done
+        </button>
+      </div>
+    </div>
+  `;
+
+  modal.style.display = 'block';
+  requestAnimationFrame(() => modal.classList.add('show'));
+}
+
+function toggleSongInPlaylist(playlistId, songObj, itemEl) {
+  const pl = AppState.playlists.find(p => p.id === playlistId);
+  if (!pl) return;
+  if (!pl.songs) pl.songs = [];
+
+  const idx = pl.songs.findIndex(s => s.title.toLowerCase() === songObj.title.toLowerCase() && s.artist.toLowerCase() === songObj.artist.toLowerCase());
+  const checkIcon = itemEl ? itemEl.querySelector('.col-item-checkbox i') : null;
+  const countEl = itemEl ? itemEl.querySelector('.col-item-count') : null;
+
+  if (idx === -1) {
+    pl.songs.unshift(songObj);
+    if (itemEl) itemEl.classList.add('selected');
+    if (checkIcon) checkIcon.className = 'fas fa-check-circle';
+    showToast(`Added to playlist "${pl.name}" 🎵`, 'success');
+  } else {
+    pl.songs.splice(idx, 1);
+    if (itemEl) itemEl.classList.remove('selected');
+    if (checkIcon) checkIcon.className = 'fas fa-circle';
+    showToast(`Removed from playlist "${pl.name}"`, 'info');
+  }
+
+  if (countEl) {
+    countEl.textContent = `${pl.songs.length} songs`;
+  }
+
+  saveState();
+  if (AppState.currentTab === 'favourites') {
+    App.renderFavourites();
+  }
+}
+
+function createNewPlaylistWithSong(songObj) {
+  const input = document.getElementById('newPlaylistInput');
+  if (!input) return;
+  const name = input.value.trim();
+  if (!name) {
+    showToast('Please enter a playlist name', 'info');
+    return;
+  }
+
+  const id = 'pl_' + Date.now();
+  const colors = ['#ff4757', '#ffa502', '#2ed573', '#1e90ff', '#9b59b6', '#e056fd', '#00d2d3'];
+  const icons = ['fa-music', 'fa-headphones', 'fa-compact-disc', 'fa-fire', 'fa-heart', 'fa-star'];
+  const randomColor = colors[Math.floor(Math.random() * colors.length)];
+  const randomIcon = icons[Math.floor(Math.random() * icons.length)];
+
+  const newPl = {
+    id,
+    name,
+    icon: randomIcon,
+    color: randomColor,
+    songs: songObj ? [songObj] : []
+  };
+
+  AppState.playlists.push(newPl);
+  saveState();
+  showToast(`Playlist "${name}" created!`, 'success');
+
+  if (songObj && songObj.stationId) {
+    openPlaylistModal(songObj.stationId);
+  } else {
+    closeCollectionModal();
+  }
+
+  if (AppState.currentTab === 'favourites') {
+    App.renderFavourites();
+  }
+}
+
+function openNewPlaylistPrompt() {
+  const name = prompt('Enter name for the new song playlist (e.g. Late Night Vibes, Workout Hits):');
+  if (!name || !name.trim()) return;
+
+  const id = 'pl_' + Date.now();
+  const colors = ['#ff4757', '#ffa502', '#2ed573', '#1e90ff', '#9b59b6', '#e056fd', '#00d2d3'];
+  const icons = ['fa-music', 'fa-headphones', 'fa-compact-disc', 'fa-fire', 'fa-heart', 'fa-star'];
+  const randomColor = colors[Math.floor(Math.random() * colors.length)];
+  const randomIcon = icons[Math.floor(Math.random() * icons.length)];
+
+  AppState.playlists.push({
+    id,
+    name: name.trim(),
+    icon: randomIcon,
+    color: randomColor,
+    songs: []
+  });
+  saveState();
+  showToast(`Playlist "${name.trim()}" created!`, 'success');
+  if (AppState.currentTab === 'favourites') {
+    App.renderFavourites();
+  }
+}
+
+function deletePlaylist(playlistId) {
+  if (playlistId === 'liked_songs') {
+    showToast('Cannot delete default Liked Songs playlist', 'info');
+    return;
+  }
+  const idx = AppState.playlists.findIndex(p => p.id === playlistId);
+  if (idx !== -1) {
+    const name = AppState.playlists[idx].name;
+    AppState.playlists.splice(idx, 1);
+    if (AppState.activePlaylistId === playlistId) {
+      AppState.activePlaylistId = null;
+    }
+    saveState();
+    showToast(`Playlist "${name}" deleted`, 'info');
+    if (AppState.currentTab === 'favourites') {
+      App.renderFavourites();
+    }
+  }
+}
+
+function removeSongFromPlaylist(playlistId, songId) {
+  const pl = AppState.playlists.find(p => p.id === playlistId);
+  if (!pl) return;
+  pl.songs = (pl.songs || []).filter(s => s.id !== songId);
+  saveState();
+  showToast('Song removed from playlist', 'info');
   if (AppState.currentTab === 'favourites') {
     App.renderFavourites();
   }
@@ -788,26 +1016,76 @@ const App = {
     });
   },
 
-  // ─── TAB 2: FAVOURITES & COLLECTIONS ───────────────────────────────────────
+  // ─── TAB 2: FAVOURITES (CHANNELS & PLAYLISTS SEGMENTS) ─────────────────────
   renderFavourites() {
     const content = document.getElementById('content');
     if (!content) return;
 
-    // Ensure collections exist
+    // Ensure collections & playlists exist
     if (!AppState.collections || !AppState.collections.length) {
       AppState.collections = JSON.parse(JSON.stringify(DEFAULT_COLLECTIONS));
       if (AppState.favourites.length) {
         AppState.collections[0].stationIds = [...AppState.favourites];
       }
     }
+    if (!AppState.playlists || !AppState.playlists.length) {
+      AppState.playlists = JSON.parse(JSON.stringify(DEFAULT_PLAYLISTS));
+    }
+    if (!AppState.favouritesSegment) AppState.favouritesSegment = 'channels';
 
-    // VIEW A: If an active collection is selected, show stations inside that collection
+    const totalChannels = AppState.collections.reduce((acc, c) => acc + (c.stationIds || []).length, 0);
+    const totalSongs = AppState.playlists.reduce((acc, p) => acc + (p.songs || []).length, 0);
+
+    content.innerHTML = `
+      <div class="tab-content favs-tab">
+        <div class="favs-tab-header">
+          <div>
+            <h2 class="tab-heading">❤️ Favourites</h2>
+            <p class="tab-subheading">Saved channels in collections & saved songs in playlists</p>
+          </div>
+        </div>
+
+        <!-- 2 BIG SEGMENTS: CHANNELS & PLAYLISTS -->
+        <div class="favs-segments-row">
+          <button class="favs-segment-card ${AppState.favouritesSegment === 'channels' ? 'active' : ''}" 
+                  onclick="AppState.favouritesSegment='channels'; AppState.activeCollectionId=null; AppState.activePlaylistId=null; App.renderFavourites()">
+            <div class="favs-seg-icon" style="background:#ff475722;color:#ff4757">
+              <i class="fas fa-tower-broadcast"></i>
+            </div>
+            <div class="favs-seg-info">
+              <h3>Channels</h3>
+              <p>${AppState.collections.length} Collections • ${totalChannels} Saved Stations</p>
+            </div>
+            <i class="fas fa-chevron-right favs-seg-arrow"></i>
+          </button>
+
+          <button class="favs-segment-card ${AppState.favouritesSegment === 'playlists' ? 'active' : ''}" 
+                  onclick="AppState.favouritesSegment='playlists'; AppState.activeCollectionId=null; AppState.activePlaylistId=null; App.renderFavourites()">
+            <div class="favs-seg-icon" style="background:#70a1ff22;color:#70a1ff">
+              <i class="fas fa-list-music"></i>
+            </div>
+            <div class="favs-seg-info">
+              <h3>Playlists</h3>
+              <p>${AppState.playlists.length} Playlists • ${totalSongs} Saved Songs</p>
+            </div>
+            <i class="fas fa-chevron-right favs-seg-arrow"></i>
+          </button>
+        </div>
+
+        <!-- SEGMENT CONTENT -->
+        <div class="favs-segment-body">
+          ${AppState.favouritesSegment === 'channels' ? this.renderChannelsSegment() : this.renderPlaylistsSegment()}
+        </div>
+      </div>
+    `;
+  },
+
+  renderChannelsSegment() {
     if (AppState.activeCollectionId) {
       const col = AppState.collections.find(c => c.id === AppState.activeCollectionId);
       if (!col) {
         AppState.activeCollectionId = null;
-        this.renderFavourites();
-        return;
+        return this.renderChannelsSegment();
       }
 
       const stations = (col.stationIds || [])
@@ -816,8 +1094,8 @@ const App = {
 
       AppState.stationList = stations;
 
-      content.innerHTML = `
-        <div class="tab-content favs-tab">
+      return `
+        <div class="collection-detail-wrap">
           <div class="collection-detail-header">
             <button class="icon-btn back-btn" onclick="AppState.activeCollectionId=null;App.renderFavourites()" title="Back to Collections">
               <i class="fas fa-arrow-left"></i>
@@ -850,71 +1128,173 @@ const App = {
               <button class="btn-primary" onclick="App.renderTab('home')">Explore Channels</button>
             </div>
           `}
-        </div>`;
-      return;
+        </div>
+      `;
     }
 
-    // VIEW B: Collections Grid / Overview
-    const totalFavsCount = AppState.favourites.length;
+    return `
+      <div class="collections-grid">
+        ${AppState.collections.map(col => {
+          const count = (col.stationIds || []).length;
+          const previewStations = (col.stationIds || [])
+            .slice(0, 3)
+            .map(id => RadioData.getById(id))
+            .filter(Boolean);
 
-    content.innerHTML = `
-      <div class="tab-content favs-tab">
-        <div class="favs-tab-header">
-          <div>
-            <h2 class="tab-heading">❤️ Collections & Favourites</h2>
-            <p class="tab-subheading">${AppState.collections.length} Collections • ${totalFavsCount} Total Saved Stations</p>
-          </div>
-        </div>
-
-        <!-- COLLECTIONS FOLDERS GRID -->
-        <div class="collections-grid">
-          ${AppState.collections.map(col => {
-            const count = (col.stationIds || []).length;
-            const previewStations = (col.stationIds || [])
-              .slice(0, 3)
-              .map(id => RadioData.getById(id))
-              .filter(Boolean);
-
-            return `
-              <div class="collection-folder-card" onclick="AppState.activeCollectionId='${col.id}';App.renderFavourites()">
-                <div class="col-folder-top">
-                  <span class="col-folder-icon" style="background:${col.color}22;color:${col.color}">
-                    <i class="fas ${col.icon || 'fa-folder'}"></i>
-                  </span>
-                  <span class="col-folder-count-pill">${count} stations</span>
-                </div>
-                <div class="col-folder-info">
-                  <h3 class="col-folder-title">${col.name}</h3>
-                  <div class="col-folder-preview">
-                    ${previewStations.length ? previewStations.map(st => `
-                      <span class="preview-mini-pill" style="border-left:3px solid ${st.color}">
-                        ${st.name}
-                      </span>
-                    `).join('') : '<span class="preview-empty-text">Empty collection</span>'}
-                  </div>
-                </div>
-                <div class="col-folder-footer">
-                  <span class="col-folder-view-btn">View Stations <i class="fas fa-chevron-right"></i></span>
-                  ${col.id !== 'all' ? `
-                    <button class="col-folder-del-mini" onclick="event.stopPropagation();deleteCollection('${col.id}')" title="Delete">
-                      <i class="fas fa-trash-alt"></i>
-                    </button>
-                  ` : ''}
+          return `
+            <div class="collection-folder-card" onclick="AppState.activeCollectionId='${col.id}';App.renderFavourites()">
+              <div class="col-folder-top">
+                <span class="col-folder-icon" style="background:${col.color}22;color:${col.color}">
+                  <i class="fas ${col.icon || 'fa-folder'}"></i>
+                </span>
+                <span class="col-folder-count-pill">${count} stations</span>
+              </div>
+              <div class="col-folder-info">
+                <h3 class="col-folder-title">${col.name}</h3>
+                <div class="col-folder-preview">
+                  ${previewStations.length ? previewStations.map(st => `
+                    <span class="preview-mini-pill" style="border-left:3px solid ${st.color}">
+                      ${st.name}
+                    </span>
+                  `).join('') : '<span class="preview-empty-text">Empty collection</span>'}
                 </div>
               </div>
-            `;
-          }).join('')}
-
-          <!-- CREATE NEW COLLECTION CARD -->
-          <div class="collection-folder-card create-card" onclick="openNewCollectionPrompt()">
-            <div class="create-col-inner">
-              <div class="create-col-icon"><i class="fas fa-plus"></i></div>
-              <span class="create-col-label">New Collection</span>
-              <small class="create-col-hint">Group your favourite channels</small>
+              <div class="col-folder-footer">
+                <span class="col-folder-view-btn">View Stations <i class="fas fa-chevron-right"></i></span>
+                ${col.id !== 'all' ? `
+                  <button class="col-folder-del-mini" onclick="event.stopPropagation();deleteCollection('${col.id}')" title="Delete">
+                    <i class="fas fa-trash-alt"></i>
+                  </button>
+                ` : ''}
+              </div>
             </div>
+          `;
+        }).join('')}
+
+        <!-- CREATE NEW COLLECTION CARD -->
+        <div class="collection-folder-card create-card" onclick="openNewCollectionPrompt()">
+          <div class="create-col-inner">
+            <div class="create-col-icon"><i class="fas fa-plus"></i></div>
+            <span class="create-col-label">New Collection</span>
+            <small class="create-col-hint">Group your favourite channels</small>
           </div>
         </div>
-      </div>`;
+      </div>
+    `;
+  },
+
+  renderPlaylistsSegment() {
+    if (AppState.activePlaylistId) {
+      const pl = AppState.playlists.find(p => p.id === AppState.activePlaylistId);
+      if (!pl) {
+        AppState.activePlaylistId = null;
+        return this.renderPlaylistsSegment();
+      }
+
+      const songs = pl.songs || [];
+
+      return `
+        <div class="collection-detail-wrap">
+          <div class="collection-detail-header">
+            <button class="icon-btn back-btn" onclick="AppState.activePlaylistId=null;App.renderFavourites()" title="Back to Playlists">
+              <i class="fas fa-arrow-left"></i>
+            </button>
+            <div class="collection-detail-title-wrap">
+              <span class="col-detail-icon" style="background:${pl.color}22;color:${pl.color}">
+                <i class="fas ${pl.icon || 'fa-music'}"></i>
+              </span>
+              <div>
+                <h2 class="list-title">${pl.name}</h2>
+                <span class="count-badge">${songs.length} saved songs</span>
+              </div>
+            </div>
+            ${pl.id !== 'liked_songs' ? `
+              <button class="icon-btn col-delete-header-btn" onclick="deletePlaylist('${pl.id}')" title="Delete Playlist">
+                <i class="fas fa-trash-alt"></i>
+              </button>
+            ` : '<div></div>'}
+          </div>
+
+          ${songs.length ? `
+            <div class="songs-list-view">
+              ${songs.map(song => `
+                <div class="song-row-item" onclick="Player.connectApp('spotify', '${escapeQuotes(song.stationName)}', '${escapeQuotes(song.title)}', '${escapeQuotes(song.artist)}')">
+                  <img class="song-row-thumb" src="${song.thumb}" alt="${escapeQuotes(song.title)}" onerror="this.onerror=null;this.src='${RADIO_SVG_FALLBACK}';" />
+                  <div class="song-row-meta">
+                    <h4 class="song-row-title">${escapeHtml(song.title)}</h4>
+                    <p class="song-row-artist"><i class="fas fa-microphone-alt"></i> ${escapeHtml(song.artist)}</p>
+                    <span class="song-row-source"><i class="fas fa-broadcast-tower"></i> ${escapeHtml(song.stationName || 'Radio Station')}</span>
+                  </div>
+                  <div class="song-row-actions" onclick="event.stopPropagation()">
+                    <button class="icon-btn song-action-btn" onclick="Player.connectApp('spotify', '${escapeQuotes(song.stationName)}', '${escapeQuotes(song.title)}', '${escapeQuotes(song.artist)}')" title="Play on Spotify">
+                      <i class="fab fa-spotify" style="color:#1DB954"></i>
+                    </button>
+                    <button class="icon-btn song-action-btn" onclick="removeSongFromPlaylist('${pl.id}', '${song.id}')" title="Remove from playlist">
+                      <i class="fas fa-trash-alt"></i>
+                    </button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          ` : `
+            <div class="empty-state">
+              <i class="fas fa-music"></i>
+              <p>No songs saved in "${pl.name}" yet</p>
+              <small>Tap the bookmark 🔖 icon in the music player while any song is playing to save it here.</small>
+              <button class="btn-primary" onclick="App.renderTab('home')">Listen to Live Radio</button>
+            </div>
+          `}
+        </div>
+      `;
+    }
+
+    return `
+      <div class="collections-grid">
+        ${AppState.playlists.pl ? '' : ''}
+        ${AppState.playlists.map(pl => {
+          const count = (pl.songs || []).length;
+          const previewSongs = (pl.songs || []).slice(0, 3);
+
+          return `
+            <div class="collection-folder-card" onclick="AppState.activePlaylistId='${pl.id}';App.renderFavourites()">
+              <div class="col-folder-top">
+                <span class="col-folder-icon" style="background:${pl.color}22;color:${pl.color}">
+                  <i class="fas ${pl.icon || 'fa-music'}"></i>
+                </span>
+                <span class="col-folder-count-pill">${count} songs</span>
+              </div>
+              <div class="col-folder-info">
+                <h3 class="col-folder-title">${pl.name}</h3>
+                <div class="col-folder-preview">
+                  ${previewSongs.length ? previewSongs.map(s => `
+                    <span class="preview-mini-pill" style="border-left:3px solid ${pl.color}">
+                      ${s.title}
+                    </span>
+                  `).join('') : '<span class="preview-empty-text">Empty playlist</span>'}
+                </div>
+              </div>
+              <div class="col-folder-footer">
+                <span class="col-folder-view-btn">View Playlist <i class="fas fa-chevron-right"></i></span>
+                ${pl.id !== 'liked_songs' ? `
+                  <button class="col-folder-del-mini" onclick="event.stopPropagation();deletePlaylist('${pl.id}')" title="Delete">
+                    <i class="fas fa-trash-alt"></i>
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+          `;
+        }).join('')}
+
+        <!-- CREATE NEW PLAYLIST CARD -->
+        <div class="collection-folder-card create-card" onclick="openNewPlaylistPrompt()">
+          <div class="create-col-inner">
+            <div class="create-col-icon"><i class="fas fa-plus"></i></div>
+            <span class="create-col-label">New Playlist</span>
+            <small class="create-col-hint">Save playing songs</small>
+          </div>
+        </div>
+      </div>
+    `;
   },
 
   // ─── TAB 3: BROWSE BY COUNTRY (LAYOUT 3 OF 2 ROWS + OTHER COUNTRIES) ────────

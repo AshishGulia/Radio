@@ -299,9 +299,14 @@ const Player = (() => {
             <p class="player-main-artist-name" id="playerArtistName"><i class="fas fa-microphone-alt"></i> ${songInfo.artist}</p>
             <span class="player-station-tagline">${station.flag || '🌍'} ${station.name} • ${station.city}</span>
           </div>
-          <button class="fav-btn ${isFav ? 'active' : ''}" onclick="openCollectionModal('${station.id}')" id="playerFavBtn" aria-label="Save to Collection">
-            <i class="fa${isFav ? 's' : 'r'} fa-heart"></i>
-          </button>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <button class="icon-btn song-save-btn" onclick="openPlaylistModal('${station.id}')" title="Save Song to Playlist" aria-label="Save Song to Playlist" style="width:40px;height:40px;border-radius:50%;background:var(--bg-card);color:var(--accent);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+              <i class="fas fa-bookmark"></i>
+            </button>
+            <button class="fav-btn ${isFav ? 'active' : ''}" onclick="openCollectionModal('${station.id}')" id="playerFavBtn" aria-label="Save to Collection">
+              <i class="fa${isFav ? 's' : 'r'} fa-heart"></i>
+            </button>
+          </div>
         </div>
 
         <!-- STATUS ROW: GREEN BLINKING LIVE MUSIC OR SOLID RED AD / TALK / NEWS (REQUIREMENT 4) -->
