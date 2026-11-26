@@ -623,6 +623,27 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+function isNonEnglishName(name) {
+  if (!name) return false;
+  return /[^\x00-\x7F]/.test(name);
+}
+
+function buildHomeThumbnailCard(station) {
+  const sid = String(station.id || station.stationuuid);
+  const faviconUrl = getStationFavicon(station);
+  const nonEnglish = isNonEnglishName(station.name);
+
+  return `
+    <div class="home-thumb-card" onclick="App.openStation('${escapeQuotes(sid)}')">
+      <div class="home-thumb-logo-box" style="background:${station.color}22;border:1px solid ${station.color}44;">
+        <img class="home-thumb-img" src="${escapeHtml(faviconUrl)}" alt="${escapeHtml(station.name)}" loading="lazy" onerror="this.onerror=null;this.src='${RADIO_SVG_FALLBACK}';" />
+        <span class="home-thumb-flag">${station.flag || '🌍'}</span>
+      </div>
+      ${nonEnglish ? `<span class="home-thumb-non-eng-name">${escapeHtml(station.name)}</span>` : ''}
+    </div>
+  `;
+}
+
 // ─── STATION ROW ITEM (MINIMAL: logo favicon + name + green/red status + fav) ──────
 function buildStationCard(station, opts = {}) {
   const sid = String(station.id);
@@ -790,14 +811,18 @@ const App = {
     }
   },
 
-  // ─── TAB 1: HOME (DYNAMIC LIVE RADIO-BROWSER FEED + PAGINATION) ──────────────
+  // ─── TAB 1: HOME (LOCAL, GLOBAL, GENRE ROWS WITH HORIZONTAL SLIDES) ────────
   renderHome() {
     const content = document.getElementById('content');
     if (!content) return;
 
+    const localStations = (typeof RadioData !== 'undefined' && RadioData.getByCountry) ? RadioData.getByCountry('India').slice(0, 15) : [];
+    const globalStations = (typeof RadioData !== 'undefined' && RadioData.stations) ? RadioData.stations.slice(0, 15) : [];
+    const genreStations = (typeof RadioData !== 'undefined' && RadioData.getByCategory) ? RadioData.getByCategory('bollywood').slice(0, 15) : [];
+
     content.innerHTML = `
       <div class="tab-content home-tab">
-        <!-- SEARCH BAR (SEARCHES NAME, SINGER, KEYWORDS ON RADIO-BROWSER) -->
+        <!-- SEARCH BAR -->
         <div class="search-bar-wrap">
           <div class="search-bar">
             <i class="fas fa-search"></i>
@@ -810,63 +835,40 @@ const App = {
           </div>
         </div>
 
-        <!-- POPULAR COUNTRIES FILTER RIBBON -->
-        <div class="filter-chips-section">
-          <div class="filter-section-title"><i class="fas fa-globe-americas"></i> Filter by Country:</div>
-          <div class="chips-scroll-row" id="countryFilterChips">
-            ${this.popularCountries.map(c => `
-              <button class="filter-chip ${(c.name === 'All' && !this.liveFilter.country) || this.liveFilter.country === c.name ? 'active' : ''}"
-                      onclick="App.selectLiveCountry('${c.name}')">
-                <span class="chip-flag">${c.flag}</span>
-                <span class="chip-name">${c.label}</span>
-              </button>
-            `).join('')}
+        <!-- ROW 1: LOCAL STATIONS -->
+        <div class="home-section-block">
+          <div class="home-section-header">
+            <h3><i class="fas fa-map-marker-alt" style="color:var(--accent);"></i> Local Stations</h3>
+            <span class="home-count-pill">${localStations.length} channels</span>
+          </div>
+          <div class="home-horizontal-slider">
+            ${localStations.map(s => buildHomeThumbnailCard(s)).join('')}
           </div>
         </div>
 
-        <!-- GENRE / TAG FILTER RIBBON -->
-        <div class="filter-chips-section" style="margin-top:8px;">
-          <div class="filter-section-title"><i class="fas fa-music"></i> Filter by Genre:</div>
-          <div class="chips-scroll-row" id="genreFilterChips">
-            ${this.popularGenres.map(g => `
-              <button class="filter-chip ${(g.id === '' && !this.liveFilter.tag) || this.liveFilter.tag === g.id ? 'active' : ''}"
-                      onclick="App.selectLiveGenre('${g.id}')">
-                <i class="fas ${g.icon} chip-icon"></i>
-                <span class="chip-name">${g.name}</span>
-              </button>
-            `).join('')}
+        <!-- ROW 2: GLOBAL STATIONS -->
+        <div class="home-section-block">
+          <div class="home-section-header">
+            <h3><i class="fas fa-globe" style="color:var(--accent);"></i> Global Stations</h3>
+            <span class="home-count-pill">${globalStations.length} channels</span>
+          </div>
+          <div class="home-horizontal-slider">
+            ${globalStations.map(s => buildHomeThumbnailCard(s)).join('')}
           </div>
         </div>
 
-        <!-- LIVE STREAM FEED STATUS BAR -->
-        <div class="live-feed-header">
-          <div class="feed-header-left">
-            <span class="feed-pulse-dot"></span>
-            <h3 class="feed-title">Live Global Stations</h3>
+        <!-- ROW 3: GENRE STATIONS -->
+        <div class="home-section-block">
+          <div class="home-section-header">
+            <h3><i class="fas fa-music" style="color:var(--accent);"></i> Music & Genres</h3>
+            <span class="home-count-pill">${genreStations.length} channels</span>
           </div>
-          <span class="feed-count-pill" id="feedCountPill">
-            ${this.liveStations.length ? `${this.liveStations.length} channels` : 'Fetching…'}
-          </span>
+          <div class="home-horizontal-slider">
+            ${genreStations.map(s => buildHomeThumbnailCard(s)).join('')}
+          </div>
         </div>
-
-        <!-- STATIONS LIST VIEW (HTTPS ONLY) -->
-        <div class="stations-list-view" id="liveStationsContainer">
-          ${this.liveStations.length ? this.liveStations.map(s => buildStationCard(s)).join('') : this.renderSkeletons()}
-        </div>
-
-        <!-- REQUIREMENT 1: LOAD MORE BUTTON (INCREMENTS OFFSET BY 50) -->
-        <div class="load-more-container" id="loadMoreContainer" style="display:${this.hasMoreStations ? 'flex' : 'none'};">
-          <button class="load-more-btn" id="loadMoreBtn" onclick="App.loadMoreStations()">
-            <i class="fas fa-plus-circle"></i>
-            <span>Load More Stations (+50)</span>
-          </button>
-        </div>
-      </div>`;
-
-    // If stations not loaded yet, initiate fetch
-    if (!this.liveStations.length) {
-      this.loadLiveStations(false);
-    }
+      </div>
+    `;
   },
 
   renderSkeletons() {
