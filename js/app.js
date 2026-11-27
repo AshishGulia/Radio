@@ -663,7 +663,7 @@ function buildHomeThumbnailCard(station) {
     <div class="home-thumb-card" onclick="App.openStation('${escapeQuotes(sid)}')">
       <div class="home-thumb-logo-box" style="background:${station.color}22;border:1px solid ${station.color}44;">
         <img class="home-thumb-img" src="${escapeHtml(faviconUrl)}" alt="${escapeHtml(station.name)}" loading="lazy" onerror="handleImageError(this)" />
-        <span class="home-thumb-flag">${station.flag || '🌍'}</span>
+        <span class="home-thumb-flag">${typeof getCountryFlagHtml === 'function' ? getCountryFlagHtml({ name: station.country, flag: station.flag, code: station.countrycode }, 'row-flag-img') : (station.flag || '🌍')}</span>
       </div>
       ${nonEnglish ? `<span class="home-thumb-non-eng-name">${escapeHtml(station.name)}</span>` : ''}
     </div>
@@ -703,6 +703,21 @@ function buildHomeGenreThumbnailCard(cat) {
         <img class="home-genre-img" src="${cat.img}" alt="${escapeHtml(cat.name)}" loading="lazy" />
         <div class="home-genre-overlay"></div>
         <span class="home-genre-name">${escapeHtml(cat.name)}</span>
+      </div>
+    </div>
+  `;
+}
+
+function buildFilmStripGenreCard(cat) {
+  return `
+    <div class="film-strip-frame" onclick="App.openCategory('${cat.id}')" title="${escapeHtml(cat.name)}">
+      <div class="film-frame-img-wrap">
+        <img class="film-frame-img" src="${cat.img}" alt="${escapeHtml(cat.name)}" loading="lazy" />
+        <div class="film-frame-vignette"></div>
+      </div>
+      <div class="film-frame-footer">
+        <span class="film-frame-title">${escapeHtml(cat.name)}</span>
+        <span class="film-frame-badge"><i class="fas fa-play" style="font-size:0.5rem;"></i></span>
       </div>
     </div>
   `;
@@ -1092,30 +1107,21 @@ const App = {
           `}
         </div>
 
-        <!-- ROW 3: RECENT GENRES -->
+        <!-- ROW 3: RECENT GENRES / ALL GENRES FILM STRIP -->
         <div class="home-section-block">
           <div class="home-section-header">
             <div>
-              <h3><i class="fas fa-layer-group" style="color:var(--accent);"></i> Recent genres</h3>
+              <h3><i class="fas fa-film" style="color:var(--accent);"></i> Recent genres</h3>
             </div>
-            <button class="see-all-btn" onclick="${recentGenreItems.length ? 'App.openRecentGenresView()' : 'App.openAllGenresView()'}">
-              ${recentGenreItems.length ? 'See all' : 'All genres'} <i class="fas fa-chevron-right"></i>
+            <button class="see-all-btn" onclick="App.openAllGenresView()">
+              All genres <i class="fas fa-chevron-right"></i>
             </button>
           </div>
-          ${recentGenreItems.length ? `
-            <div class="home-horizontal-slider">
-              ${recentGenreItems.map(cat => buildHomeGenreThumbnailCard(cat)).join('')}
+          <div class="film-strip-container">
+            <div class="film-strip-scroll">
+              ${(recentGenreItems.length ? recentGenreItems : CATEGORY_FEATURED).map(cat => buildFilmStripGenreCard(cat)).join('')}
             </div>
-          ` : `
-            <div class="home-empty-row-card" onclick="App.renderTab('browse')">
-              <i class="fas fa-sliders-h"></i>
-              <div>
-                <strong>No recent genres yet</strong>
-                <span>Open any genre in Browse to save it here</span>
-              </div>
-              <i class="fas fa-chevron-right"></i>
-            </div>
-          `}
+          </div>
         </div>
       </div>
     `;
@@ -1666,28 +1672,20 @@ const App = {
             <button class="favs-big-button upper-btn"
                     onclick="App.openFavouritesSection('collections')"
                     title="Open Collections">
-              <div class="favs-btn-icon col-icon">
-                <i class="fas fa-layer-group"></i>
-              </div>
-              <div class="favs-btn-text">
+              <div class="favs-btn-text glass-translucent-box">
                 <span class="favs-btn-title">Collections</span>
                 <span class="favs-btn-sub">${AppState.collections.length} Collections • ${totalChannels} Saved Channels</span>
               </div>
-              <i class="fas fa-chevron-right favs-btn-chevron"></i>
             </button>
 
             <!-- LOWER BUTTON: PLAYLISTS -->
             <button class="favs-big-button lower-btn"
                     onclick="App.openFavouritesSection('playlists')"
                     title="Open Playlists">
-              <div class="favs-btn-icon pl-icon">
-                <i class="fas fa-list-music"></i>
-              </div>
-              <div class="favs-btn-text">
+              <div class="favs-btn-text glass-translucent-box">
                 <span class="favs-btn-title">Playlists</span>
                 <span class="favs-btn-sub">${AppState.playlists.length} Playlists • ${totalSongs} Saved Songs</span>
               </div>
-              <i class="fas fa-chevron-right favs-btn-chevron"></i>
             </button>
           </div>
         </div>
@@ -2045,16 +2043,18 @@ const App = {
             </div>
           </div>
 
-          <!-- ROW 3: GENRES -->
+          <!-- ROW 3: GENRES (MOVIE REEL FILM STRIP) -->
           <div class="home-section-block">
             <div class="home-section-header">
-              <h3><i class="fas fa-music" style="color:var(--accent);"></i> Genres</h3>
+              <h3><i class="fas fa-film" style="color:var(--accent);"></i> Genres</h3>
               <button class="see-all-btn" onclick="App.openAllGenresView()" title="View all music genres">
                 See all <i class="fas fa-chevron-right"></i>
               </button>
             </div>
-            <div class="home-horizontal-slider">
-              ${CATEGORY_FEATURED.map(cat => buildHomeGenreThumbnailCard(cat)).join('')}
+            <div class="film-strip-container">
+              <div class="film-strip-scroll">
+                ${CATEGORY_FEATURED.map(cat => buildFilmStripGenreCard(cat)).join('')}
+              </div>
             </div>
           </div>
         </div>
