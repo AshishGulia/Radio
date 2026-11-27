@@ -65,7 +65,7 @@ app.get('/api/stations', async (req, res) => {
     try {
       const url = `${mirror}/json/stations/search?${params.toString()}`;
       const response = await fetch(url, {
-        headers: { 'User-Agent': 'RadioTym/2.0' },
+        headers: { 'User-Agent': 'RadioNerve/2.0' },
         signal: AbortSignal.timeout(6000)
       });
       if (response.ok) {
@@ -112,7 +112,7 @@ app.get('/api/states', async (req, res) => {
         ? `${mirror}/json/states/${encodeURIComponent(country)}/`
         : `${mirror}/json/states`;
       const response = await fetch(url, {
-        headers: { 'User-Agent': 'RadioTym/2.0' },
+        headers: { 'User-Agent': 'RadioNerve/2.0' },
         signal: AbortSignal.timeout(6000)
       });
       if (response.ok) {
@@ -144,7 +144,7 @@ app.get('/api/icy-meta', async (req, res) => {
     const response = await fetch(streamUrl, {
       headers: {
         'Icy-MetaData': '1',
-        'User-Agent': 'RadioTym-ICY-Parser/2.0'
+        'User-Agent': 'RadioNerve-ICY-Parser/2.0'
       },
       signal: controller.signal
     });
@@ -262,7 +262,7 @@ app.get('/api/lyrics', async (req, res) => {
   // 1. Try LRCLIB exact get
   try {
     const lrclibUrl = `https://lrclib.net/api/get?artist_name=${encodeURIComponent(cleanArtist)}&track_name=${encodeURIComponent(cleanTrack)}`;
-    const lrclibRes = await fetch(lrclibUrl, { headers: { 'User-Agent': 'RadioTym-Player/2.0' } });
+    const lrclibRes = await fetch(lrclibUrl, { headers: { 'User-Agent': 'RadioNerve-Player/2.0' } });
     if (lrclibRes.ok) {
       const data = await lrclibRes.json();
       if (data && (data.plainLyrics || data.syncedLyrics)) {
@@ -286,7 +286,7 @@ app.get('/api/lyrics', async (req, res) => {
   try {
     const searchParam = `${cleanArtist} ${cleanTrack}`.trim();
     const searchUrl = `https://lrclib.net/api/search?q=${encodeURIComponent(searchParam)}`;
-    const searchRes = await fetch(searchUrl, { headers: { 'User-Agent': 'RadioTym-Player/2.0' } });
+    const searchRes = await fetch(searchUrl, { headers: { 'User-Agent': 'RadioNerve-Player/2.0' } });
     if (searchRes.ok) {
       const items = await searchRes.json();
       if (Array.isArray(items) && items.length > 0) {
@@ -347,7 +347,7 @@ app.get('*', (req, res) => {
 
 if (!process.env.VERCEL) {
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`RadioTym server running at http://0.0.0.0:${PORT}`);
+    console.log(`Radio Nerve server running at http://0.0.0.0:${PORT}`);
   });
 }
 

@@ -55,7 +55,7 @@ function saveState() {
       const st = (typeof RadioData !== 'undefined' && RadioData.getById) ? RadioData.getById(id) : null;
       if (st) savedStations[String(id)] = st;
     });
-    localStorage.setItem('radiowave_state', JSON.stringify({
+    localStorage.setItem('radionerve_state', JSON.stringify({
       favourites: AppState.favourites,
       collections: AppState.collections,
       playlists: AppState.playlists,
@@ -76,7 +76,7 @@ function saveState() {
 
 function loadState() {
   try {
-    const raw = localStorage.getItem('radiowave_state');
+    const raw = localStorage.getItem('radionerve_state') || localStorage.getItem('radiowave_state');
     if (!raw) return;
     const saved = JSON.parse(raw);
     if (saved.theme)             AppState.theme = saved.theme;
@@ -624,7 +624,7 @@ function shareStation(stationId) {
   const station = RadioData.getById(stationId);
   if (!station) return;
   const songInfo = NowPlaying.getSongInfo(stationId);
-  const shareText = `Listening to ${station.name} (${station.city}) on RadioTym! Now playing: "${songInfo.song}" by ${songInfo.artist}`;
+  const shareText = `Listening to ${station.name} (${station.city}) on Radio Nerve! Now playing: "${songInfo.song}" by ${songInfo.artist}`;
 
   if (navigator.share) {
     navigator.share({

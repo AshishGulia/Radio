@@ -72,7 +72,7 @@ const NowPlaying = (() => {
         isMusic: false,
         badgeText: 'AD / TALK / NEWS',
         badgeClass: 'status-red',
-        artist: stationName || 'RadioTym Broadcast',
+        artist: stationName || 'Radio Nerve Broadcast',
         song: 'Live News & Talk Segment',
         streamTitle: streamTitle || 'News / Talk'
       };
@@ -85,7 +85,7 @@ const NowPlaying = (() => {
         isMusic: false,
         badgeText: 'AD / TALK / NEWS',
         badgeClass: 'status-red',
-        artist: stationName || 'RadioTym Airwaves',
+        artist: stationName || 'Radio Nerve Airwaves',
         song: 'Station Intermission / Break',
         streamTitle: ''
       };
@@ -318,7 +318,7 @@ const NowPlaying = (() => {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: info.song,
         artist: info.artist,
-        album: current.name || 'RadioTym',
+        album: current.name || 'Radio Nerve',
         artwork: [
           { src: info.thumb || current.favicon || RADIO_SVG_FALLBACK, sizes: '512x512', type: 'image/jpeg' }
         ]

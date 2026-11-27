@@ -3783,29 +3783,22 @@ header {
   position: fixed;
   inset: 0;
   z-index: 300;
-  max-width: 420px;
-  left: 50%;
-  transform: translateX(-50%) translateY(100%);
+  transform: translateY(100%);
   transition: transform 0.36s cubic-bezier(0.16, 1, 0.3, 1);
   background: var(--bg-primary);
   overflow: hidden;
+  max-width: 420px;
+  left: 50%;
+  margin-left: -210px;
   box-shadow: 0 -10px 48px rgba(0, 0, 0, 0.7);
 }
 
 @media (max-width: 420px) {
-  #genre-window {
-    left: 0;
-    margin-left: 0;
-    max-width: 100%;
-    transform: translateY(100%);
-  }
-  #genre-window.open {
-    transform: translateY(0);
-  }
+  #genre-window { left: 0; margin-left: 0; max-width: 100%; }
 }
 
 #genre-window.open {
-  transform: translateX(-50%) translateY(0);
+  transform: translateY(0);
 }
 
 .genre-window-container {

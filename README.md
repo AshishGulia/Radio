@@ -1,4 +1,4 @@
-# RadioTym 📻
+# Radio Nerve 📻
 
 A modern, responsive web application for streaming live global and local radio stations with a luxury aesthetic, tactile controls, and rich media playback.
 
@@ -20,7 +20,7 @@ A modern, responsive web application for streaming live global and local radio s
 ## Directory Structure
 
 ```
-RadioTym/
+RadioNerve/
 ├── index.html              # Main application entry point
 ├── css/
 │   ├── styles.css          # Core design system, variables, layouts & themes

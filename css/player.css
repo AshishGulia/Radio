@@ -167,43 +167,44 @@
 }
 
 /* 30% TOP PART: COMPACT FM STATION EMBLEM LOGO */
+/* SQUARE SHAPED CHANNEL LOGO BUTTON */
 .player-channel-logo-card {
-  width: 220px;
-  height: 75px;
-  border-radius: 18px;
+  width: 94px;
+  height: 94px;
+  border-radius: 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
   flex-shrink: 0;
-  padding: 6px 12px;
+  padding: 8px;
 }
 
 .player-channel-logo-card .player-tuner-ring {
   position: absolute;
   inset: -4px;
-  border-radius: 20px;
+  border-radius: 22px;
   border: 1px dashed rgba(255, 255, 255, 0.18);
   pointer-events: none;
 }
 
 .player-channel-logo-card .player-emblem-badge {
-  font-size: 0.6rem;
+  font-size: 0.55rem;
   font-weight: 800;
-  letter-spacing: 0.6px;
+  letter-spacing: 0.5px;
   color: rgba(255, 255, 255, 0.95);
-  background: rgba(0, 0, 0, 0.45);
-  padding: 1px 7px;
-  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 1px 6px;
+  border-radius: 10px;
   margin-bottom: 2px;
 }
 
 .player-channel-logo-card .player-logo-initials {
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   font-weight: 900;
   color: #fff;
   line-height: 1;
@@ -212,50 +213,49 @@
 }
 
 .player-channel-logo-card .player-logo-station-name {
-  font-size: 0.72rem;
+  font-size: 0.65rem;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.9);
-  max-width: 180px;
+  max-width: 82px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-top: 1px;
+  margin-top: 2px;
 }
 
 .player-channel-logo-card .player-logo-dial {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 3px;
+  display: none;
 }
 
-.player-channel-logo-card .dial-dot {
-  width: 4px;
-  height: 4px;
-}
-
-.player-channel-logo-card .dial-line {
-  width: 24px;
-  height: 2px;
-}
-
-/* 70% MAIN HERO PART: LARGE SONG THUMBNAIL CARD */
+/* CINEMATIC MOVIE THEATRE LANDSCAPE VIEW WITH BLACK BORDER EDGES & SIDE FADING */
 .player-song-thumb-card {
-  width: 220px;
-  height: 200px;
-  border-radius: 24px;
+  width: 100%;
+  max-width: 350px;
+  height: 160px;
+  border-radius: 14px;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.45), 0 3px 8px rgba(0, 0, 0, 0.25);
-  border: 1px solid var(--border);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), inset 0 0 0 2px #0a0a0f;
+  border: 2px solid #14141c;
   cursor: pointer;
   transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
   flex-shrink: 0;
+  /* Cinematic side fade vignette merging into dark background */
+  mask-image: linear-gradient(90deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,1) 12%, rgba(0,0,0,1) 88%, rgba(0,0,0,0.05) 100%);
+  -webkit-mask-image: linear-gradient(90deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,1) 12%, rgba(0,0,0,1) 88%, rgba(0,0,0,0.05) 100%);
+}
+
+.player-song-thumb-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(17,18,22,0.95) 0%, transparent 16%, transparent 84%, rgba(17,18,22,0.95) 100%);
+  pointer-events: none;
 }
 
 .player-song-thumb-card:hover {
-  transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.5), 0 0 24px var(--accent-glow);
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.7), 0 0 24px var(--accent-glow);
   border-color: var(--accent);
 }
 

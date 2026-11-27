@@ -282,7 +282,7 @@ const Settings = (() => {
             ` : `
               <div class="form-group">
                 <label>Email</label>
-                <input type="email" id="cloudAuthEmail" class="form-input" placeholder="you@radiotym.com" />
+                <input type="email" id="cloudAuthEmail" class="form-input" placeholder="you@radionerve.com" />
               </div>
               <div class="form-group">
                 <label>Password</label>
@@ -528,7 +528,7 @@ const Settings = (() => {
           <div class="settings-section">
             <h3 class="section-title"><i class="fas fa-info-circle"></i> About</h3>
             <div class="about-info">
-              <div class="about-row"><span>App Name</span><span>RadioTym</span></div>
+              <div class="about-row"><span>App Name</span><span>Radio Nerve</span></div>
               <div class="about-row"><span>Version</span><span>1.0.0</span></div>
               <div class="about-row"><span>Build</span><span>2024.11</span></div>
               <div class="about-row"><span>Platform</span><span>Web</span></div>
@@ -633,7 +633,7 @@ const Settings = (() => {
   }
 
   function subscribe() {
-    if (confirm('Subscribe to RadioTym Premium for ₹500/year?\n\n(Demo: press OK to activate)')) {
+    if (confirm('Subscribe to Radio Nerve Premium for ₹500/year?\n\n(Demo: press OK to activate)')) {
       AppState.settings.isPremium = true;
       AppState.settings.adPreference = 'no-ads';
       saveState();

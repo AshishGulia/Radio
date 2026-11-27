@@ -1,7 +1,7 @@
 {
-  "name": "radiotym",
+  "name": "radionerve",
   "version": "1.0.0",
-  "description": "RadioTym – Live music radio from India and around the world",
+  "description": "Radio Nerve – Live music radio from India and around the world",
   "type": "module",
   "main": "server.js",
   "scripts": {

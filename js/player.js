@@ -238,12 +238,7 @@ const Player = (() => {
             <i class="fas fa-chevron-down"></i>
           </button>
           <div class="player-header-title-box">
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span class="player-header-title">${station.freq || 'LIVE FM'} • ON AIR</span>
-              <button class="fav-btn ${isFav ? 'active' : ''}" onclick="openCollectionModal('${station.id}')" id="playerTopFavBtn" aria-label="Save Channel" style="width:30px;height:30px;font-size:0.75rem;min-height:unset;background:var(--bg-card);border:1px solid var(--border);">
-                <i class="fa${isFav ? 's' : 'r'} fa-heart"></i>
-              </button>
-            </div>
+            <span class="player-header-title">${station.freq || 'LIVE FM'} • ON AIR</span>
             <span class="player-header-sub">${station.flag || '🌍'} ${station.city}, ${station.country}</span>
           </div>
           <div class="player-header-right-btns">
@@ -626,7 +621,7 @@ const Player = (() => {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: (si && si.song) || st.name,
         artist: (si && si.artist) || `${st.city}, ${st.country}`,
-        album: `${st.name} (${st.freq || 'Live FM'}) • RadioTym Car Mode`,
+        album: `${st.name} (${st.freq || 'Live FM'}) • Radio Nerve Car Mode`,
         artwork: [
           { src: art, sizes: '96x96', type: 'image/jpeg' },
           { src: art, sizes: '128x128', type: 'image/jpeg' },
